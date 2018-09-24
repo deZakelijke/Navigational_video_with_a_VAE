@@ -1,5 +1,6 @@
 # Data
 images/
+results/
 *.jpg
 
 # Byte-compiled / optimized / DLL files

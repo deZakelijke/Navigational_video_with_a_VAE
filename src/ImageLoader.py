@@ -20,10 +20,10 @@ class ImageLoader(Dataset):
     def __len__(self):
         return self.nr_images
 
-    def __getitem(self, index):
-        path = self.path + str(idx + self.first_image) + '.png'
+    def __getitem__(self, index):
+        path = self.path + str(index + self.first_image) + '.png'
         image = Image.open(path)
         image = image.resize((128, 128))
-        image = transforms.ToTensor()(img)
+        image = transforms.ToTensor()(image)
         return image
 
