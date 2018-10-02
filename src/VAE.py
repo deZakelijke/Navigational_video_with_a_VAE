@@ -16,23 +16,23 @@ class VAE(nn.Module):
         self.chns = 3
         self.image_size = image_size
         self.filters = 32
-        self.flat_dims = 111392
+        self.flat_dims = 512
 
         # Define encoding layers
         # Should I change the kernel and stride because I scaled to 128x128 instead of 64x64?
-        self.conv1      = nn.Conv2d(self.chns, self.chns, (2, 2))
-        self.conv2      = nn.Conv2d(self.chns, self.filters, (2, 2), stride=(2, 2))
-        self.conv3      = nn.Conv2d(self.filters, self.filters, (3, 3), stride=(1, 1))
-        self.conv4      = nn.Conv2d(self.filters, self.filters, (3, 3), stride=(1, 1))
+        self.conv1      = nn.Conv2d(self.chns, self.chns, (4, 4))
+        self.conv2      = nn.Conv2d(self.chns, self.filters, (4, 4), stride=(4, 4))
+        self.conv3      = nn.Conv2d(self.filters, self.filters, (6, 6), stride=(2, 2))
+        self.conv4      = nn.Conv2d(self.filters, self.filters, (6, 6), stride=(2, 2))
         self.fc_mu      = nn.Linear(self.flat_dims, self.latent_dims)
         self.fc_logvar  = nn.Linear(self.flat_dims, self.latent_dims)
 
         # Define decoding layers
         self.fc_dec     = nn.Linear(self.latent_dims, self.flat_dims)
-        self.deConv1    = nn.ConvTranspose2d(self.filters, self.filters, (3, 3), stride=(1, 1))
-        self.deConv2    = nn.ConvTranspose2d(self.filters, self.filters, (3, 3), stride=(1, 1))
-        self.deConv3    = nn.ConvTranspose2d(self.filters, self.filters, (3, 3), stride=(2, 2))
-        self.deConv4    = nn.ConvTranspose2d(self.filters, self.chns, 2)
+        self.deConv1    = nn.ConvTranspose2d(self.filters, self.filters, (6, 6), stride=(2, 2))
+        self.deConv2    = nn.ConvTranspose2d(self.filters, self.filters, (6, 6), stride=(3, 3))
+        self.deConv3    = nn.ConvTranspose2d(self.filters, self.filters, (8, 8), stride=(3, 3))
+        self.deConv4    = nn.ConvTranspose2d(self.filters, self.chns, (7, 7))
 
         # Other network components
         self.relu       = nn.ReLU()
@@ -45,6 +45,7 @@ class VAE(nn.Module):
         h2  = self.relu(self.conv2(h1))
         h3  = self.relu(self.conv3(h2))
         h4  = self.relu(self.conv4(h3))
+        print("h4e: ", h4.shape)
         h5  = h4.view(-1, self.flat_dims)
         return self.sigmoid(self.fc_mu(h5)), self.sigmoid(self.fc_logvar(h5))
 
@@ -59,7 +60,8 @@ class VAE(nn.Module):
     def decode(self, z):
         h1 = self.relu(self.fc_dec(z))
         h2 = self.dropout(h1)
-        h3 = h2.view(-1, 32, 59, 59)
+        print("h2d: ", h2.shape)
+        h3 = h2.view(-1, 32, 4, 4)
         h4 = self.relu(self.deConv1(h3))
         h5 = self.relu(self.deConv2(h4))
         h6 = self.relu(self.deConv3(h5))
