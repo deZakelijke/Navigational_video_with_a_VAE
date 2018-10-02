@@ -35,10 +35,10 @@ def train(epoch, train_dataset, optimiser):
                     epoch,
                     batch_idx,
                     len(train_dataset),
-                    loss.data[0]))
+                    loss.data))
     print("Epoch {}, average loss \t\t\t{}".format(
             epoch, 
-            train_loss.data[0]/len(train_dataset)))
+            train_loss.data/len(train_dataset)))
 
 
 def test(epoch, test_dataset):
@@ -58,7 +58,7 @@ def test(epoch, test_dataset):
                        "results/reconstruction_" + str(epoch) + ".png",
                        nrow=n)
 
-    print("Test set loss: \t\t\t{}".format(test_loss.data[0]/len(test_dataset)))
+    print("Test set loss: \t\t\t{}".format(test_loss.data/len(test_dataset)))
 
 
 if __name__ == "__main__":
@@ -86,16 +86,16 @@ if __name__ == "__main__":
     if args.cuda: 
         torch.cuda.manual_seed(args.seed)
 
-    train_images  = 10
-    test_images   = 10
-    train_dataset = DataLoader(ImageLoader(nr_images=train_images, first_image=0), 
+    train_images  = args.nr_images * 9 // 10
+    test_images   = args.nr_images // 10
+    train_dataset = DataLoader(ImageLoader(nr_images=train_images, root_dir='images_house/', first_image=1), 
                                batch_size=args.batch_size, 
                                shuffle=True)
-    test_dataset  = DataLoader(ImageLoader(nr_images=test_images, first_image=train_images),
+    test_dataset  = DataLoader(ImageLoader(nr_images=test_images, root_dir='images_sistine/', first_image=train_images),
                                batch_size=args.batch_size,
                                shuffle=True)
     
-    latent_dims = 2
+    latent_dims = 64
     image_size = (128, 128)
     size = (3, *image_size)
     model = VAE(latent_dims, image_size)
@@ -106,7 +106,8 @@ if __name__ == "__main__":
     for epoch in range(1, args.epochs + 1):
         try:
             train(epoch, train_dataset, optimiser)
-            test(epoch, test_dataset)
+    # TODO watch out, training set is the same as test set
+            test(epoch, train_dataset)
 
         except KeyboardInterrupt:
             print("Manual quitting")

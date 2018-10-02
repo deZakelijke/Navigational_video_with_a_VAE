@@ -45,7 +45,6 @@ class VAE(nn.Module):
         h2  = self.relu(self.conv2(h1))
         h3  = self.relu(self.conv3(h2))
         h4  = self.relu(self.conv4(h3))
-        print("h4e: ", h4.shape)
         h5  = h4.view(-1, self.flat_dims)
         return self.sigmoid(self.fc_mu(h5)), self.sigmoid(self.fc_logvar(h5))
 
@@ -60,7 +59,6 @@ class VAE(nn.Module):
     def decode(self, z):
         h1 = self.relu(self.fc_dec(z))
         h2 = self.dropout(h1)
-        print("h2d: ", h2.shape)
         h3 = h2.view(-1, 32, 4, 4)
         h4 = self.relu(self.deConv1(h3))
         h5 = self.relu(self.deConv2(h4))
