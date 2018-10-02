@@ -79,6 +79,8 @@ if __name__ == "__main__":
                                 help='Path to file to save model')
     parser.add_argument('--learning-rate', type=float, default=1e-3, metavar='L',
                                 help='The learning rate of the model')
+    parser.add_argument('--dataset', type=str, default='images_house/', metavar='D',
+                                help='Folder of the data set that contains the images')
     
     args = parser.parse_args()
     args.cuda = args.cuda and torch.cuda.is_available()
@@ -88,10 +90,12 @@ if __name__ == "__main__":
 
     train_images  = 10
     test_images   = 10
-    train_dataset = DataLoader(ImageLoader(nr_images=train_images, first_image=0), 
+    train_dataset = DataLoader(ImageLoader(nr_images=train_images, root_dir=args.dataset, 
+                               first_image=1), 
                                batch_size=args.batch_size, 
                                shuffle=True)
-    test_dataset  = DataLoader(ImageLoader(nr_images=test_images, first_image=train_images),
+    test_dataset  = DataLoader(ImageLoader(nr_images=test_images, root_dir=args.dataset, 
+                               first_image=train_images),
                                batch_size=args.batch_size,
                                shuffle=True)
     
