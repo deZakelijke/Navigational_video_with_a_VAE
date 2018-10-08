@@ -2,7 +2,7 @@ import torch
 import numpy as np
 from torch.utils.data import Dataset
 from torchvision import transforms, utils
-from bouncing_ball import *
+from bouncing_balls import *
 
 class BouncingBallLoader(Dataset):
 
@@ -17,4 +17,4 @@ class BouncingBallLoader(Dataset):
 
 
     def __getitem__(self, index):
-        return self.data[0,0,index]
+        return self.data[index]
