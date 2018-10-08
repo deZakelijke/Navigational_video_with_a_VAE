@@ -152,8 +152,8 @@ if __name__ == "__main__":
     N_SAMPLES = 1
     RADII = 1.2,
     N_STEPS = 1600
-    PLOT = False
-    RADII = 2.
+    PLOT = True
+    #RADII = 2.
 
     if PLOT:
         live_plot_bouncing_ball_data(n_steps = N_STEPS, resolution=RESOLUTION, n_balls=N_BALLS, n_samples=N_SAMPLES, radii=RADII)
