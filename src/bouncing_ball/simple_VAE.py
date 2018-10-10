@@ -1,0 +1,61 @@
+import math
+import torch
+import numpy as np
+from torch import nn, optim
+from torch.autograd import Variable
+from torchvision import datasets, transforms
+
+
+class VAE(nn.Module):
+
+    def __init__(self, latent_dims=2, image_size=(30, 30)):
+        super().__init__()
+
+        self.latent_dims = latent_dims
+        self.image_size = image_size
+        self.intermediate_dims = 42
+        self.flat_dims = 30 * 30
+
+        self.enc1    = nn.Linear(self.flat_dims, self.intermediate_dims)
+        self.enc_mu  = nn.Linear(self.intermediate_dims, self.latent_dims)
+        self.enc_std = nn.Linear(self.intermediate_dims, self.latent_dims)
+
+        self.dec1    = nn.Linear(self.latent_dims, self.intermediate_dims)
+        self.dec_mu  = nn.Linear(self.intermediate_dims, self.flat_dims)
+        self.dec_std = nn.Linear(self.intermediate_dims, self.flat_dims)
+
+        self.activation = nn.Tanh()
+
+
+
+    def encode(self, x):
+        reshape = x.view(-1, 900)
+        h1 = self.activation(self.enc1(reshape))
+        h2 = self.enc_mu(h1)
+        h3 = self.enc_std(h1)
+        return h2, h3
+
+    def decode(self, z):
+        h4 = self.activation(self.dec1(z))
+        h5 = self.dec_mu(h4)
+        h6 = self.dec_std(h4)
+        return h5, h6
+
+    def reparametrise(self, mu, logvar):
+        if self.training:
+            std = logvar.mul(0.5).exp_()
+            eps = Variable(std.data.new(std.size()).normal_())
+            return eps.mul(std).add_(mu)
+        else:
+            return mu
+
+    def forward(self, x):
+        mu, logvar = self.encode(x)
+        z = self.reparametrise(mu, logvar)
+        mu2, logvar2 = self.decode(z)
+        x_hat = (self.reparametrise(mu2, logvar2)).view(-1, 900)
+        return x_hat, mu, logvar
+            
+
+if __name__ == "__main__":
+    pass
