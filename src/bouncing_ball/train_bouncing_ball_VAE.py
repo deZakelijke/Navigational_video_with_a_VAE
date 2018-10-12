@@ -13,9 +13,10 @@ from torchvision import datasets, transforms
 from torchvision.utils import save_image
 
 def loss_function(recon_x, x, mu, logvar):
-    MSE = F.mse_loss(recon_x, x)
+    #MSE = F.mse_loss(recon_x, x, size_average=False)
+    BCE = F.binary_cross_entropy(recon_x, x, size_average=False)
     KLD = 0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-    return MSE - KLD
+    return BCE - KLD
 
 
 def train(epoch, train_dataset, optimiser):
@@ -46,7 +47,7 @@ def test(epoch, test_dataset):
         recon_x , mu, logvar = model(x)
         test_loss += loss_function(recon_x, x, mu, logvar)
 
-        if idx == 0 and epoch % 20 == 0:
+        if idx == 0 and epoch % 200 == 0:
             n = min(x.size(0), 8)
             comparison = torch.cat([x[:n],
                 recon_x.view(args.batch_size, *size)[:n]])
@@ -84,11 +85,11 @@ if __name__ == "__main__":
     train_dataset = DataLoader(BouncingBallLoader(n_steps=args.nr_images), 
                                batch_size=args.batch_size, 
                                shuffle=True)
-    test_dataset  = DataLoader(BouncingBallLoader(n_steps=args.nr_images),
+    test_dataset  = DataLoader(BouncingBallLoader(n_steps=args.nr_images // 10),
                                batch_size=args.batch_size,
                                shuffle=True)
 
-    latent_dims = 2
+    latent_dims = 16
     image_size = (30, 30)
     size = (1, *image_size)
     model = VAE(latent_dims, image_size).float()
@@ -105,11 +106,21 @@ if __name__ == "__main__":
             print("Manual quitting")
             sys.exit(0)
         finally:
-            print("Saving model")
-            save_file = "{}bouncing_ball_model_epoch_{}_batch_size_{}.pt".format(
-                        args.save_path,
-                        epoch,
-                        args.batch_size)
-            torch.save(model, save_file)
+            if epoch % 100 == 0:
+                print("Creating random sample")
+                sample = Variable(torch.randn(36, latent_dims))
+                if args.cuda:
+                    sample = sample.cuda()
+                sample = model.decode(sample).cpu()
+                save_image(sample.data.view(36, *size), "{}sample_{}.png".format(
+                    args.save_path,
+                    epoch))
+
+                print("Saving model")
+                save_file = "{}bouncing_ball_model_epoch_{}_batch_size_{}.pt".format(
+                            args.save_path,
+                            epoch,
+                            args.batch_size)
+                torch.save(model, save_file)
 
 

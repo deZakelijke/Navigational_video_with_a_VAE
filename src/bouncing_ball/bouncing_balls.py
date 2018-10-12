@@ -159,5 +159,5 @@ if __name__ == "__main__":
         live_plot_bouncing_ball_data(n_steps = N_STEPS, resolution=RESOLUTION, n_balls=N_BALLS, n_samples=N_SAMPLES, radii=RADII)
     else:
         d = load_bouncing_ball_data(n_steps=N_STEPS, resolution=RESOLUTION, n_balls = N_BALLS, n_samples = N_SAMPLES, radii=RADII)
-        print(f'Generated a shape {d.shape} array of bouncing ball data')
+        #print(f'Generated a shape {d.shape} array of bouncing ball data')
 
