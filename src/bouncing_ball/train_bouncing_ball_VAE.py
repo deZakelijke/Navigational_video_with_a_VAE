@@ -89,7 +89,7 @@ if __name__ == "__main__":
                                batch_size=args.batch_size,
                                shuffle=True)
 
-    latent_dims = 16
+    latent_dims = 2
     image_size = (30, 30)
     size = (1, *image_size)
     model = VAE(latent_dims, image_size).float()
@@ -112,8 +112,7 @@ if __name__ == "__main__":
                 if args.cuda:
                     sample = sample.cuda()
                 sample = model.decode(sample).cpu()
-                save_image(sample.data.view(36, *size), "{}sample_{}.png".format(
-                    args.save_path,
+                save_image(sample.data.view(36, *size), "results/sample_{}.png".format(
                     epoch))
 
                 print("Saving model")
