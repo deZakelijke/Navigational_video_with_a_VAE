@@ -91,7 +91,7 @@ def generate_bouncing_ball_positions(
                     v[..., j, :] += np.where(colliding[:, None], separation_directions*(new_v_j-vj)[:, None], 0)
 
 
-def generate_bouncing_ball_data(resolution, n_samples, radii=1.2, **kwargs) -> Generator['ndarray(n_samples, resolution, resolution)[float]', None, None]:
+def generate_bouncing_ball_data(resolution, n_samples, radii=1.2, save_positions=False, **kwargs) -> Generator['ndarray(n_samples, resolution, resolution)[float]', None, None]:
     """
     Generate images of simulated bouncing balls.
     :param resolution: The resolution of the images to create
@@ -100,18 +100,27 @@ def generate_bouncing_ball_data(resolution, n_samples, radii=1.2, **kwargs) -> G
     """
     for x in generate_bouncing_ball_positions(radii = radii, n_samples=n_samples, **kwargs):
         img = draw_balls(x, resolution=resolution, radii=radii)
-        yield img
+        if save_positions:
+            yield img, x
+        else:
+            yield img
 
 
-def load_bouncing_ball_data(resolution, n_steps, n_samples, **kwargs):
+def load_bouncing_ball_data(resolution, n_steps, n_samples, save_positions=False, **kwargs):
     """
     Load the bouncing ball dataset.
     :return: An ndarray[n_steps, n_samples, resolution, resolution] containing images of the bouncing balls over time.
     """
+    N_BALLS = 1
     data = np.empty((n_steps, n_samples, resolution, resolution))
-    for t, imgs in enumerate(generate_bouncing_ball_data(resolution=resolution, n_steps=n_steps, n_samples=n_samples, **kwargs)):
-        data[t] = imgs
-    return data
+    positions = np.empty((n_steps, n_samples, N_BALLS, 2))
+    for t, imgs in enumerate(generate_bouncing_ball_data(resolution=resolution, n_steps=n_steps, n_samples=n_samples, save_positions=save_positions, **kwargs)):
+        data[t] = imgs[0]
+        positions[t] = imgs[1]
+    if save_positions:
+        return data, positions
+    else:
+        return data
 
 
 def draw_balls(positions: 'ndarray(n_samples,n_balls,n_dim)[float]', resolution, radii) -> 'ndarray(n_samples, res, res)[float])':
@@ -158,6 +167,6 @@ if __name__ == "__main__":
     if PLOT:
         live_plot_bouncing_ball_data(n_steps = N_STEPS, resolution=RESOLUTION, n_balls=N_BALLS, n_samples=N_SAMPLES, radii=RADII)
     else:
-        d = load_bouncing_ball_data(n_steps=N_STEPS, resolution=RESOLUTION, n_balls = N_BALLS, n_samples = N_SAMPLES, radii=RADII)
+        d = load_bouncing_ball_data(n_steps=N_STEPS, resolution=RESOLUTION, n_balls = N_BALLS, n_samples = N_SAMPLES, radii=RADII, save_positions=False)
         #print(f'Generated a shape {d.shape} array of bouncing ball data')
 
