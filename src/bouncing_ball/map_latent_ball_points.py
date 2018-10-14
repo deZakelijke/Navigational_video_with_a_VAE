@@ -3,6 +3,7 @@ import torch
 from matplotlib import pyplot as plt
 from bouncing_balls import *
 from simple_VAE import VAE
+from torch.autograd import Variable
 
 
 def plot_mapping(old_xy_points, new_xy_points):
@@ -32,11 +33,20 @@ if __name__ == "__main__":
     N_SAMPLES = 1
     RADII = 1.2,
     model_path = "models/bouncing_ball_model_epoch_2000_batch_size_32.pt"
-    #model = torch.load(model_path)
+    model = torch.load(model_path)
 
     nr_points = 10
 
     images, positions = load_bouncing_ball_data(n_steps=nr_points, resolution=RESOLUTION, n_balls=N_BALLS, n_samples=N_SAMPLES, radii=RADII, save_positions=True)
 
-    for coordinates in positions:
-        print(coordinates)
+    flat_coordinates_old = np.array([list(coordinates[0][0]) for coordinates in positions]).T
+
+    model.eval()
+    images = torch.from_numpy(images).float().cuda()
+    latent_points = model.reparametrise(*model.encode(images)).cpu()
+
+    flat_coordinates_new = [list(coordinates) for coordinates in latent_points.data.numpy()]
+    flat_coordinates_new = np.array(flat_coordinates_new).T
+    print(flat_coordinates_old)
+    print(flat_coordinates_new)
+    plot_mapping(flat_coordinates_old, flat_coordinates_new)
