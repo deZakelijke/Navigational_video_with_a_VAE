@@ -8,13 +8,15 @@ from VAE import VAE
 from torch import nn, optim
 from torch.utils.data import DataLoader
 from torch.autograd import Variable
+from torch.nn import functional as F
 from torchvision import datasets, transforms
 from torchvision.utils import save_image
 
 def loss_function(recon_x, x, mu, logvar):
-    MSE = torch.sum((recon_x - x) ** 2)
+    #MSE = torch.sum((recon_x - x) ** 2)
+    BCE = F.binary_cross_entropy(recon_x, x, size_average = False)
     KLD = 0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-    return MSE - KLD
+    return BCE - KLD
 
 def train(epoch, train_dataset, optimiser):
     model.train()
