@@ -1,5 +1,6 @@
 import numpy as np
 from future.moves import itertools
+
 from artemis.fileman.file_getter import get_file
 from artemis.general.numpy_helpers import get_rng
 from artemis.ml.tools.iteration import batchify_generator
@@ -60,6 +61,33 @@ def generate_smoothly_varying_bboxes(img_size, crop_size, speed, jitter=0.1, rng
         yield l, t, l+crop_size_x, t+crop_size_y
 
 
+def get_image_batch_crop_generator(img, crop_size, batch_size, mode, speed=10, randomness=0.1):
+    """
+    Convenience function for generating data
+
+    :param Callable[[int,int], Generator[Tuple[int,int,int,int]] bbox_gen_func: A function that, given a (y,x) image size,
+        ruturns a bounding-box generator.
+    :param img: A (size_y, size_x, 3) image.
+    :param crop_size: A crop size
+    :param batch_size: The number of crops to batch together.
+    :return Generator[Tuple[array[batch_size, 4], array[batch_size,crop_size[0],crop_size[1],3]]]: A generator which yields
+        typles of bounding boxes and the images cropped by them.
+    """
+    im_shape = img.shape[:2]
+    if mode=='smooth':
+        speed = 10
+        randomness = 0.1
+        bbox_gen_func = lambda im_shape: generate_smoothly_varying_bboxes(img_size = img.shape[:2], crop_size=crop_size, speed=speed, jitter=randomness)
+    elif mode=='random':
+        bbox_gen_func = lambda im_shape: generate_random_bboxes(img_size = img.shape[:2], crop_size=crop_size)
+    else:
+        raise Exception()
+
+    for bboxes in batchify_generator((bbox_gen_func(im_shape) for _ in itertools.count(0)), batch_size=batch_size):
+        cropped_images = np.array([crop_img_with_bbox(img, bbox = bbox, crop_edge_setting='error') for bbox in bboxes])
+        yield bboxes, cropped_images
+
+
 if __name__ == "__main__":
     from artemis.fileman.smart_io import smart_load_image
     from artemis.general.image_ops import resize_image
@@ -67,27 +95,11 @@ if __name__ == "__main__":
 
     # Here we demonstrate our data-generating process for the "crop from image" experiments, wherein we generate a bunch
     # of crops from a given image.
-
-    width = 2000
-    crop_size = (200, 200)
-    batch_size = 16
     mode='smooth'  # 'smooth': Drifts randomly around crop space.  'random' gives random crops
-    path = get_file('data/images/sistine_chapel.jpg', url='https://drive.google.com/uc?export=download&id=1g4HOxo2doBL6aPgYFoiqgLC8Mkinqao6')
-    img = resize_image(smart_load_image(path), width=width, mode='preserve_aspect')
-    if mode=='smooth':
-        speed = 10
-        randomness = 0.1
-        bbox_gen_func = lambda: generate_smoothly_varying_bboxes(img_size = img.shape[:2], crop_size=crop_size, speed=speed, jitter=randomness)
-    elif mode=='random':
-        bbox_gen_func = lambda: generate_random_bboxes(img_size = img.shape[:2], crop_size=crop_size)
-    else:
-        raise Exception()
-
-    img = resize_image(smart_load_image(path), width=width, mode='preserve_aspect')
+    img = resize_image(smart_load_image(get_file('data/images/sistine_chapel.jpg', url='https://drive.google.com/uc?export=download&id=1g4HOxo2doBL6aPgYFoiqgLC8Mkinqao6')), width=2000, mode='preserve_aspect')
     dbplot(img, 'image')
-    for bboxes in batchify_generator((bbox_gen_func() for _ in itertools.count(0)), batch_size=batch_size):
-        cropped_images = np.array([crop_img_with_bbox(img, bbox = bbox, crop_edge_setting='error') for bbox in bboxes])
+    for bboxes, image_crops in get_image_batch_crop_generator(img=img, crop_size=(200, 200), batch_size=16, mode=mode, speed=10, randomness=0.1):
         with hold_dbplots():
-            dbplot(cropped_images, 'crops')
+            dbplot(image_crops, 'crops')
             for i, bbox in enumerate(bboxes):
                 dbplot(bbox, f'bbox[{i}]', axis='image', plot_type=DBPlotTypes.BBOX_R)
