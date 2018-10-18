@@ -29,8 +29,6 @@ class VAE(nn.Module):
         self.activation = nn.Tanh()
         self.sigm = nn.Sigmoid()
 
-
-
     def encode(self, x):
         reshape = x.view(-1, 900)
         h1 = self.activation(self.enc1(reshape))
