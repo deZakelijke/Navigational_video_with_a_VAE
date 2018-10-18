@@ -2,15 +2,18 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 
+def get_2d_point_colours(points):
+    points_norm = (points - points.min(axis=1, keepdims=True)) / (points.max(axis=1, keepdims=True) - points.min(axis=1, keepdims=True))
+    return [(y, x, 1-x) for x, y in points_norm.T]
+
+
 def plot_mapping(old_xy_points, new_xy_points):
     """
     :param old_xy_points: (2xN) array
     :param new_xy_points: (2xN) array
     """
 
-    old_xy_points_norm = (old_xy_points - old_xy_points.min(axis=1, keepdims=True)) / \
-                         (old_xy_points.max(axis=1, keepdims=True) - old_xy_points.min(axis=1, keepdims=True))
-    colours = [(y, x, 1-x) for x, y in old_xy_points_norm.T]
+    colours = get_2d_point_colours(old_xy_points)
 
     ax = plt.subplot(1, 2, 1)
     ax.scatter(old_xy_points[0], old_xy_points[1], c=colours)
