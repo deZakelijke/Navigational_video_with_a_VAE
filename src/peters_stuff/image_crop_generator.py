@@ -1,5 +1,5 @@
 import numpy as np
-from future.moves import itertools
+import itertools
 
 from artemis.fileman.file_getter import get_file
 from artemis.general.numpy_helpers import get_rng
