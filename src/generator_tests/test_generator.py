@@ -26,7 +26,7 @@ def demo_train_image_generator(
         batch_size=64,
         cuda=False,
         seed=1234,
-        checkpoints={0:10, 100:100, 1000: 1000},
+        checkpoints={0:10, 100:100, 1000: 1000, 5000:5000},
         learning_rate=1e-3,
         coordinate_dims = 2,
         image_size = (64, 64),
@@ -99,7 +99,7 @@ def demo_train_image_generator(
             generated_images = generator_model(coordinates)
 
             with hold_dbplots():
-                dbplot(rollaxis(generated_images.detach.cpu().numpy(), 1, 4), 'recons')
+                dbplot(np.rollaxis(generated_images.detach().cpu().numpy(), 1, 4), 'recons')
 
         break
 
