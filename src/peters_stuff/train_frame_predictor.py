@@ -4,26 +4,28 @@ import numpy as np
 import torch
 import torch.utils.data
 from torch.nn.functional import binary_cross_entropy
-from artemis.experiments import experiment_function
+from artemis.experiments import experiment_function, experiment_root
 from artemis.fileman.file_getter import get_file
 from artemis.fileman.smart_io import smart_load_image
 from artemis.general.checkpoint_counter import Checkpoints, do_every
 from artemis.general.image_ops import resize_image
 from artemis.general.measuring_periods import measure_period
-from artemis.plotting.db_plotting import dbplot, hold_dbplots
+from artemis.plotting.db_plotting import dbplot, hold_dbplots, DBPlotTypes
 from src.VAE_with_Disc import VAEGAN, VAE, VAETrainer, TemporallySmoothVAETrainer
 from src.peters_stuff.image_crop_generator import get_image_batch_crop_generator
 from src.peters_stuff.sweeps import generate_linear_sweeps
 
 
-@experiment_function
+@experiment_root
 def demo_train_just_vae_on_images(
         batch_size=64,
-        cuda=False,
+        cuda=True,
         seed=1234,
         checkpoints={0:10, 100:100, 1000: 1000},
         learning_rate=1e-4,
         image_size = (64, 64),
+        filters = 128,
+        n_iter = None,
         ):
 
     latent_dims = 2
@@ -45,14 +47,15 @@ def demo_train_just_vae_on_images(
     #     device=device
     # )
 
-    model = VAE(latent_dims=latent_dims, image_size=image_size, filters=32).to(device)
+    model = VAE(latent_dims=latent_dims, image_size=image_size, filters=filters).to(device)
     opt = torch.optim.Adam(list(model.parameters()), lr = learning_rate, betas = (0.5, 0.999))
 
     is_checkpoint = Checkpoints(checkpoints)
 
     img = resize_image(smart_load_image(get_file('data/images/sistine_chapel.jpg', url='https://drive.google.com/uc?export=download&id=1g4HOxo2doBL6aPgYFoiqgLC8Mkinqao6')), width=2000, mode='preserve_aspect')
 
-    cut_size = 128
+    # cut_size = 128
+    cut_size = 512
     img = img[img.shape[0]//2-cut_size//2:img.shape[0]//2+cut_size//2, img.shape[1]//2-cut_size//2:img.shape[1]//2+cut_size//2]  # TODO: Revert... this is just to test on a smaller version
 
     dbplot(img, 'full_img')
@@ -61,6 +64,9 @@ def demo_train_just_vae_on_images(
     # mode = 'smooth'
     mode = 'random'
     for i, (bboxes, image_crops) in enumerate(get_image_batch_crop_generator(img=img, crop_size=image_size, batch_size=batch_size, mode=mode, speed=10, randomness=0.1)):
+
+        if n_iter is not None and i>=n_iter:
+            break
 
         # dbplot(image_crops, 'crops')
 
@@ -76,16 +82,18 @@ def demo_train_just_vae_on_images(
         predicted_imgs = model.decode(torch.Tensor(positions).to(device))
 
         # loss = binary_cross_entropy(predicted_imgs, var_image_crops, size_average = False)
-        loss = torch.nn.functional.mse_loss(predicted_imgs, var_image_crops, size_average = False)
+        # loss = torch.nn.functional.mse_loss(predicted_imgs, var_image_crops, size_average = False)
+        loss = torch.nn.functional.mse_loss(predicted_imgs, var_image_crops, size_average = True)
         loss.backward()
         opt.step()
+
 
         rate = 1/measure_period('train_step')
         if do_every('5s'):
             print(f'Iter: {i}, Iter/s: {rate:.3g}, Loss: {loss:.3g}')
 
         if is_checkpoint():
-            print('Checkping')
+            print('Checking')
 
             # recons, _, _ = model.vae(var_image_crops)
 
@@ -114,6 +122,17 @@ def demo_train_just_vae_on_images(
                 # dbplot(np.rollaxis(samples.detach().cpu().numpy(), 1, 4), 'samples', cornertext = f'Iter {i}')
                 dbplot(np.rollaxis(grid_samples.detach().cpu().numpy().reshape((grid_size, grid_size, 3)+image_size), 2, 5), 'sweeps', cornertext = f'Iter {i}')
                 # dbplot(torch.exp(model.transition_logvar), 'transitions', plot_type='line')
+        dbplot(loss, 'loss', plot_type=DBPlotTypes.LINE_HISTORY_RESAMPLED, draw_now=False)
+
+
+
+X32 = demo_train_just_vae_on_images.add_variant(filters = 32, n_iter=5000)
+X64 = demo_train_just_vae_on_images.add_variant(filters = 64, n_iter=5000)
+X128 = demo_train_just_vae_on_images.add_variant(filters = 128, n_iter=5000)
 
 if __name__ == '__main__':
-    demo_train_just_vae_on_images(cuda=True)
+    # X64.run()
+    # X32.run()
+    # X64.run()
+    # X128.run()
+    demo_train_just_vae_on_images.browse()

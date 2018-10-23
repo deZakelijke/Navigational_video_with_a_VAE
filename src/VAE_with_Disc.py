@@ -66,7 +66,6 @@ class VAE(nn.Module):
         self.relu = nn.ReLU()
         self.sigmoid = nn.Sigmoid()
 
-
     def encode(self, x):
         #print("x", x.shape)
         h1 = self.relu(self.bn_e1(self.conv1(x)))
