@@ -20,14 +20,15 @@ class VAE(nn.Module):
         latent_dims (int): number of dimensions in the latent space z
         image_size (int, int): dimensions of the image data, don't change it
     """
-    def __init__(self, latent_dims=8, image_size=(64, 64)):
+    def __init__(self, latent_dims=8, image_size=(64, 64), filters=32):
         super().__init__()
 
         self.latent_dims = latent_dims
         self.img_chns = 3
         self.image_size = image_size
-        self.filters = 32
-        self.flat = 512 * 4
+        self.filters = filters
+        # self.flat = 512 * 4
+        self.flat = 512 * filters//8
         self.intermediate_dim2 = 64 // 2 - 5
         self.intermediate_dim_disc = 32 * 60 * 60
 
