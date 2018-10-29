@@ -25,6 +25,17 @@ def plot_mapping(old_xy_points, new_xy_points):
     ax.set_title('Z location')
     plt.show()
 
+def map_images_to_points(model, images, positions):
+    flat_coordinates_old = np.array([list(coordinates[0][0]) for coordinates in positions]).T
+
+    model.eval()
+    images = torch.from_numpy(images).float()
+    latent_points = model.reparametrize(*model.encode(images))
+
+    flat_coordinates_new = [list(coordinates) for coordinates in latent_points.data.numpy()]
+    flat_coordinates_new = np.array(flat_coordinates_new).T
+    plot_mapping(flat_coordinates_old, flat_coordinates_new)
+
 
 if __name__ == "__main__":
 
@@ -39,12 +50,4 @@ if __name__ == "__main__":
 
     images, positions = load_bouncing_ball_data(n_steps=nr_points, resolution=RESOLUTION, n_balls=N_BALLS, n_samples=N_SAMPLES, radii=RADII, save_positions=True)
 
-    flat_coordinates_old = np.array([list(coordinates[0][0]) for coordinates in positions]).T
-
-    model.eval()
-    images = torch.from_numpy(images).float()
-    latent_points = model.reparametrise(*model.encode(images))
-
-    flat_coordinates_new = [list(coordinates) for coordinates in latent_points.data.numpy()]
-    flat_coordinates_new = np.array(flat_coordinates_new).T
-    plot_mapping(flat_coordinates_old, flat_coordinates_new)
+    map_images_to_points(model, images, positions)
