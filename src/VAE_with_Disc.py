@@ -20,11 +20,15 @@ class VAE(nn.Module):
         latent_dims (int): number of dimensions in the latent space z
         image_size (int, int): dimensions of the image data, don't change it
     """
-    def __init__(self, latent_dims=8, image_size=(64, 64), filters=32):
+    def __init__(self, latent_dims=8, image_size=(64, 64), filters=32, channels=3):
         super().__init__()
 
+
+        # TODO make the shape of the hidden layers dependent on the image size.
+        # Now its hardcoded for a 30x30 image. Uncomment old version for 64x64.
+
         self.latent_dims = latent_dims
-        self.img_chns = 3
+        self.img_chns = channels
         self.image_size = image_size
         self.filters = filters
         # self.flat = 512 * 4
@@ -39,16 +43,19 @@ class VAE(nn.Module):
         self.bn_e2 = nn.BatchNorm2d(self.filters * 2)
         self.conv3 = nn.Conv2d(self.filters * 2, self.filters * 4, 3, stride=2, padding=1)
         self.bn_e3 = nn.BatchNorm2d(self.filters * 4)
-        self.fc_m  = nn.Linear(self.flat * 4, self.latent_dims)
-        self.fc_s  = nn.Linear(self.flat * 4, self.latent_dims)
+        self.fc_m  = nn.Linear(self.flat, self.latent_dims)
+        self.fc_s  = nn.Linear(self.flat, self.latent_dims)
         self.bn_e4 = nn.BatchNorm1d(self.latent_dims)
 
 
         # Decoding layers
         self.fc_d    = nn.Linear(self.latent_dims, self.flat * 4)
         self.bn_d1   = nn.BatchNorm1d(self.flat * 4)
-        self.deConv1 = nn.ConvTranspose2d(self.filters * 16, self.filters * 8, 3,
+        #self.deConv1 = nn.ConvTranspose2d(self.filters * 16, self.filters * 8, 3,
+        #                                  stride=2, padding=0)
+        self.deConv1 = nn.ConvTranspose2d(self.filters * 64, self.filters * 8, 3,
                                           stride=2, padding=0)
+
         self.bn_d2   = nn.BatchNorm2d(self.filters * 8)
         self.deConv2 = nn.ConvTranspose2d(self.filters * 8, self.filters * 4, 3,
                                           stride=2, padding=1)
@@ -59,8 +66,12 @@ class VAE(nn.Module):
         self.deConv4 = nn.ConvTranspose2d(self.filters * 2, self.filters, 3,
                                           stride=2, padding=1)
         self.bn_d5   = nn.BatchNorm2d(self.filters)
-        self.conv_d  = nn.Conv2d(self.filters, self.img_chns, 4, 
+        #self.conv_d  = nn.Conv2d(self.filters, self.img_chns, 4, 
+        #                         stride=1, padding=1)
+        self.conv_d  = nn.Conv2d(self.filters, self.img_chns, 6, 
                                  stride=1, padding=1)
+
+
 
         # Other network componetns
         self.relu = nn.ReLU()
@@ -74,10 +85,12 @@ class VAE(nn.Module):
         #print(h2.shape)
         h3 = self.relu(self.bn_e3(self.conv3(h2)))
         #print(h3.shape)
-        h4 = h3.view(-1, self.flat * 4)
+        #h4 = h3.view(-1, self.flat * 4)
+        h4 = h3.view(-1, self.flat)
         #print(h4.shape)
         mu = self.relu(self.bn_e4(self.fc_m(h4)))
         logvar = self.relu(self.bn_e4(self.fc_s(h4)))
+        #print(mu.shape)
         return mu, logvar
 
     def reparametrize(self, mu, logvar):
@@ -93,7 +106,8 @@ class VAE(nn.Module):
         #print("z", z.shape)
         h1 = self.relu(self.bn_d1(self.fc_d(z)))
         #print(h1.shape)
-        h2 = h1.view(-1, self.flat // 4, 4, 4)
+        #h2 = h1.view(-1, self.flat // 4, 4, 4)
+        h2 = h1.view(-1, self.flat, 2, 2)
         #print(h2.shape)
         h3 = self.relu(self.bn_d2(self.deConv1(h2)))
         #print(h3.shape)
@@ -118,10 +132,9 @@ class VAE(nn.Module):
         Args:
             x: Input data 
         """
-        mu, logvar = self.encode(x.view(-1, 3, *self.image_size))
+        mu, logvar = self.encode(x.view(-1, self.img_chns, *self.image_size))
         z_x = self.reparametrize(mu, logvar)
         recon_x = self.decode(z_x)
-            
         return recon_x, mu, logvar
 
     # def loss_function(self, recon_x, x, mu, logvar, recon_x_disc = None, labels = None):
@@ -130,7 +143,7 @@ class VAE(nn.Module):
     #     DL  = F.binary_cross_entropy(recon_x_disc, labels)
     #     return BCE + KLD, DL
     def loss_function(self, recon_x, x, mu, logvar):
-        BCE = F.binary_cross_entropy(recon_x, x, size_average = False)
+        BCE = F.binary_cross_entropy(recon_x, x, reduction='sum')
         KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
         # DL  = F.binary_cross_entropy(recon_x_disc, labels)
         return BCE + KLD
@@ -235,7 +248,7 @@ class Discriminator(nn.Module):
         return self.discriminate(x)
 
     def loss_function(self, disc_x, labels):
-        BCE = F.binary_cross_entropy(disc_x, labels, size_average = False)
+        BCE = F.binary_cross_entropy(disc_x, labels, reduction='sum')
         return BCE
 
 
