@@ -1,3 +1,5 @@
+import sys
+sys.path.append('/home/micha/Documents/repos/Navigational_video_with_a_VAE')
 import numpy as np
 import torch
 from matplotlib import pyplot as plt
@@ -43,8 +45,8 @@ if __name__ == "__main__":
     N_BALLS = 1
     N_SAMPLES = 1
     RADII = 1.2,
-    model_path = "models/bouncing_ball_model_epoch_2000_batch_size_32.pt"
-    model = torch.load(model_path, map_location=torch.device('cpu'))
+    model_path = "models/TS_bouncing_ball_model.pt"
+    model = torch.load(model_path, map_location='cpu')
 
     nr_points = 1000
 
