@@ -89,7 +89,7 @@ class VAE(nn.Module):
         h4 = h3.view(-1, self.flat)
         #print(h4.shape)
         mu = self.sigmoid(self.bn_e4(self.fc_m(h4)))
-        logvar = self.sigmoid(self.bn_e4(self.fc_s(h4)))
+        logvar = self.relu(self.bn_e4(self.fc_s(h4)))
         #print(mu.shape)
         return mu, logvar
 
