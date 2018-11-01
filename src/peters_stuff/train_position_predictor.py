@@ -25,7 +25,7 @@ from artemis.plotting.db_plotting import dbplot, hold_dbplots, DBPlotTypes
 from src.VAE_with_Disc import VAE, get_encoding_convnet
 from src.gqn.gqn_draw import generator_rnn
 from src.gqn.gqn_params import set_gqn_param, get_gqn_param
-from src.peters_stuff.gqn_pose_predictor import query_pos_inference_rnn
+from src.peters_stuff.gqn_pose_predictor import query_pos_inference_rnn, shortened_gqn_prediction_rnn
 from src.peters_stuff.image_crop_generator import iter_bboxes_from_positions, iter_pos_random, batch_crop
 
 
@@ -360,6 +360,51 @@ class GQNPositionPredictor(IPositionPredictor):
         return lambda batch_size, image_size: GQNPositionPredictor(batch_size=batch_size, image_size=image_size, rnn_params=rnn_params, enc_h=enc_h, enc_w=enc_w)
 
 
+class GQNPositionPredictor2(IPositionPredictor):
+    """
+    Seems to work... But it's a big slow beast.
+    """
+
+    def __init__(self, batch_size, image_size, cell_downsample=4, n_maps=32):
+        set_gqn_param('POSE_CHANNELS', 2)
+        # enc_h, enc_w = get_gqn_param('ENC_HEIGHT'), get_gqn_param('ENC_WIDTH')
+        g = Namespace()
+        # g.positions = tf.placeholder(dtype=tf.float32, shape=(batch_size, 2))
+        g.target_frames = tf.placeholder(dtype=tf.float32, shape=(batch_size, *image_size, 3))
+        g.target_positions = tf.placeholder(dtype=tf.float32, shape=(batch_size, 2))
+        # g.representations = tf.zeros(dtype=tf.float32, shape=(batch_size, enc_h, enc_w, 1))
+        # g.mu_targ, _ = query_pos_inference_rnn(representations=g.representations, target_frames=g.target_frames, sequence_size=12, **rnn_params)
+
+
+        g.mu_targ, _ = shortened_gqn_prediction_rnn(image=g.target_frames, cell_downsample=cell_downsample, n_maps=n_maps)
+
+
+        g.loss = tf.reduce_mean((g.mu_targ-g.target_positions)**2)
+        g.update_op = AdamOptimizer().minimize(g.loss)
+        sess = tf.Session()
+        sess.run(tf.global_variables_initializer())
+        self.g = g
+        self.sess = sess
+
+    def train(self, image_crops, positions):
+        image_crops = imbatch_to_feat(image_crops, channel_first=False, datarange=(-1, 1))
+        predicted_positions, _, loss = self.sess.run([self.g.mu_targ, self.g.update_op, self.g.loss] , feed_dict={self.g.target_positions: positions, self.g.target_frames: image_crops})
+
+        # with hold_dbplots(draw_every=10):  # Just check that data normalization is right
+        #     dbplot(predicted_imgs, 'preed')
+        #     dbplot(image_crops, 'crooops')
+        return predicted_positions, loss
+
+    def predict(self, positions):
+        raise NotImplementedError()
+        # predicted_imgs, _, loss = self.sess.run([self.g.mu_targ] , feed_dict={self.g.positions: positions})
+        # return feat_to_imbatch(predicted_imgs, channel_first=False, datarange=(-1, 1)), loss
+
+    @staticmethod
+    def get_constructor(n_maps=32):
+        return lambda batch_size, image_size: GQNPositionPredictor2(batch_size=batch_size, image_size=image_size, n_maps=n_maps)
+
+
 
 @ExperimentFunction(is_root=True, compare=get_timeseries_record_comparison_function(yfield='rel_error'), one_liner_function=lambda result: f'iter:{result[-1]["iter"]}, rel_error:[min:{min(result[:, "rel_error"]):.3g}, final:{result[-1, "rel_error"]:.3g} ]')
 def demo_train_position_predictor(
@@ -467,13 +512,19 @@ Xgridsgd.add_variant(filters = 64)
 
 XV2 = demo_train_position_predictor.add_config_root_variant('convgrid2', model_constructor = ConvnetGridPredictor2.get_constructor)
 Xgqn = demo_train_position_predictor.add_config_root_variant('gqn', model_constructor = GQNPositionPredictor.get_constructor)
+Xgqn2 = demo_train_position_predictor.add_config_root_variant('gqn2', model_constructor = GQNPositionPredictor2.get_constructor)
 # Xgqn_params = Xgqn.add_variant(rnn_params = {})
 # Xgqn_params = Xgqn.add_variant(enc_h=4, enc_w = 4, rnn_params = dict(lstm_canvas_channels=64))
 # Xgqn_params = Xgqn.add_variant(enc_h=4, enc_w = 4, )
-Xgqn_params = Xgqn.add_variant(rnn_params = dict(lstm_canvas_channels=0, lstm_output_channels=64, generator_input_channels=0, inference_input_channels=0))
+
+
+Xgqn_THIS_WORKS_DONT_TOUCH = Xgqn.add_variant(rnn_params = dict(lstm_canvas_channels=0, lstm_output_channels=64, generator_input_channels=0, inference_input_channels=0))
+# Xgqn_params = Xgqn.add_variant(n_maps=32)
 
 if __name__ == '__main__':
-    Xgqn_params.run()
+    # Xgqn_params.run()
+    # Xgqn_THIS_WORKS_DONT_TOUCH.call()
+    Xgqn2.call()
     # X64.run()
     # X32.call(learning_rate=1e-3)
     # Xgrid.call(n_iter=100000)
