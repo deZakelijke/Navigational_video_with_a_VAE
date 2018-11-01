@@ -231,7 +231,7 @@ def crop_img_with_bbox(img, bbox, crop_edge_setting = 'cut'):
         return img[y_ixs[:, None], x_ixs]
     elif crop_edge_setting=='error':
         l, t, r, b = np.round(bbox).astype(np.int)
-        assert l>=0 and t>=0 and r<img.shape[1] and b<=img.shape[0], f'bbox {(l, t, r, b)} did not fit in image of size {img.shape}'
+        assert l>=0 and t>=0 and r<=img.shape[1] and b<=img.shape[0], f'bbox {(l, t, r, b)} did not fit in image of size {img.shape}'
         return img[int(t):int(b), int(l):int(r)]
     else:
         raise Exception(crop_edge_setting)

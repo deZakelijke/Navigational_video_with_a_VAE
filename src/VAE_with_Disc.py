@@ -5,8 +5,107 @@ from torch import nn, optim
 from torch.autograd import Variable
 from torch.nn import functional as F
 from torchvision import datasets, transforms
+from torchvision.models import resnet18, ResNet
+from torchvision.models.resnet import BasicBlock, Bottleneck
 
 from artemis.plotting.db_plotting import dbplot
+
+def identity(x):
+    return x
+
+class IdentityModule(nn.Module):
+
+    def forward(self, x):
+        return x
+
+class Flatten(nn.Module):
+    def forward(self, input):
+        return input.view(input.size(0), -1)
+
+class PositionEstimationLayer(nn.Module):
+
+    def __init__(self, grid_size, ranges):
+        nn.Module.__init__(self)
+        minrange, maxrange = ranges
+        grid_data = np.array(np.meshgrid(*(np.linspace(minrange, maxrange, s) for s in grid_size))).reshape(2, -1)
+        self.position_grid = torch.nn.Parameter(torch.Tensor(grid_data), requires_grad=False)  # (2, grid_size[0]*grid_size[1])
+        # self.position_grid = torch.Tensor(np.array(np.meshgrid(*(np.linspace(minrange, maxrange, s) for s in grid_size))).reshape(2, -1))  # (2, grid_size[0]*grid_size[1])
+
+    def forward(self, x):
+        weights = torch.nn.functional.softmax(x, dim=1)  # (n_samples, grid_size[0]*grid_size[1])
+        est_pos = (weights[:, None, :]*self.position_grid[None, :, :]).sum(dim=2)
+        return est_pos
+
+
+class CoordConv2d(nn.Module):
+
+    def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0):
+        nn.Module.__init__(self)
+        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride=stride, padding=padding)
+        self.coordconv = nn.Conv2d(2, out_channels, kernel_size, stride=stride, padding=padding)
+        self.coords = None
+
+    def forward(self, x):
+        if self.coords is None:
+            sy, sx = x.size()[-2:]
+            self.coords = torch.stack(torch.meshgrid([torch.linspace(0, 1, sy), torch.linspace(0, 1, sx)]))[None].to('cuda' if torch.cuda.is_available() else 'cpu')
+        return self.conv(x) + self.coordconv(self.coords)
+
+
+
+def get_encoding_convnet(image_channels, filters, use_batchnorm, grid_size):
+
+    flat_dim = 512 * filters//8
+    grid_size_prod = grid_size[0] * grid_size[1]
+    # model = nn.Sequential(
+    #     nn.Conv2d(image_channels, filters, 3, stride=2, padding=1),
+    #     nn.BatchNorm2d(filters) if use_batchnorm else IdentityModule(),
+    #     nn.ReLU(),
+    #     nn.Conv2d(filters, filters * 2, 3, stride=2, padding=1),
+    #     nn.BatchNorm2d(filters * 2) if use_batchnorm else IdentityModule(),
+    #     nn.ReLU(),
+    #     nn.Conv2d(filters * 2, filters * 4, 3, stride=2, padding=1),
+    #     nn.BatchNorm2d(filters * 4) if use_batchnorm else IdentityModule(),
+    #     nn.ReLU(),
+    #     Flatten(),
+    #     nn.Linear(flat_dim * 4, grid_size_prod),
+    #     PositionEstimationLayer(grid_size=grid_size, ranges=(-.5, .5))
+    # )
+
+    # model = resnet18(num_classes = 2)
+
+    use_coordconv=True
+    convlayer = CoordConv2d if use_coordconv else nn.Conv2d
+
+    model = nn.Sequential(
+        nn.Conv2d(image_channels, filters, kernel_size=3, padding=1),  # (64x64)
+        BasicBlock(filters, filters),
+        # BasicBlock(filters, filters),
+        nn.Conv2d(filters, filters*4, kernel_size=3, padding=1, stride=2),  # (32x32)
+        BasicBlock(filters*4, filters*4),
+        # BasicBlock(filters*4, filters*4),
+        nn.Conv2d(filters*4, filters*8, kernel_size=3, padding=1, stride=2),  # (16x16)
+        BasicBlock(filters*8, filters*8),
+        # BasicBlock(filters*8, filters*8),
+        nn.Conv2d(filters*8, filters*16, kernel_size=3, padding=1, stride=2),  # (8x8)
+        BasicBlock(filters*16, filters*16),
+        # BasicBlock(filters*16, filters*16),
+        nn.Conv2d(filters*16, filters*32, kernel_size=3, padding=1, stride=2),  # (4x4)
+        Flatten(),
+        nn.Linear(filters * 32 * 4 * 4, grid_size_prod),
+        PositionEstimationLayer(grid_size=grid_size, ranges=(-.5, .5))
+
+    )
+    # model = ResNet(block = BasicBlock, layers = [2, 2, 2, 2])
+
+    # ).to(device)# self.opt = torch.optim.Adam(list(self.model.parameters()), lr = learning_rate, betas = (0.5, 0.999))
+    # self.opt = _get_named_opt(opt, parameters=self.model.parameters(), learning_rate=learning_rate)
+    # self.position_grid = torch.Tensor(np.array(np.meshgrid(*(np.linspace(-.5, .5, s) for s in gridsize))).reshape(2, -1)).to(self.device)  # (2, grid_size[0]*grid_size[1])
+    return model
+    # def forward(self, x):
+    #     self.model
+
+
 
 
 class VAE(nn.Module):
@@ -20,11 +119,11 @@ class VAE(nn.Module):
         latent_dims (int): number of dimensions in the latent space z
         image_size (int, int): dimensions of the image data, don't change it
     """
-    def __init__(self, latent_dims=8, image_size=(64, 64), filters=32):
+    def __init__(self, latent_dims=8, image_size=(64, 64), filters=32, img_channels=3, use_batchnorm = True):
         super().__init__()
 
         self.latent_dims = latent_dims
-        self.img_chns = 3
+        self.img_chns = img_channels
         self.image_size = image_size
         self.filters = filters
         # self.flat = 512 * 4
@@ -34,31 +133,31 @@ class VAE(nn.Module):
 
         # Encoding layers for the mean and logvar of the latent space
         self.conv1 = nn.Conv2d(self.img_chns, self.filters, 3, stride=2, padding=1)
-        self.bn_e1 = nn.BatchNorm2d(self.filters)
+        self.bn_e1 = nn.BatchNorm2d(self.filters) if use_batchnorm else identity
         self.conv2 = nn.Conv2d(self.filters, self.filters * 2, 3, stride=2, padding=1)
-        self.bn_e2 = nn.BatchNorm2d(self.filters * 2)
+        self.bn_e2 = nn.BatchNorm2d(self.filters * 2) if use_batchnorm else identity
         self.conv3 = nn.Conv2d(self.filters * 2, self.filters * 4, 3, stride=2, padding=1)
-        self.bn_e3 = nn.BatchNorm2d(self.filters * 4)
+        self.bn_e3 = nn.BatchNorm2d(self.filters * 4) if use_batchnorm else identity
         self.fc_m  = nn.Linear(self.flat * 4, self.latent_dims)
         self.fc_s  = nn.Linear(self.flat * 4, self.latent_dims)
-        self.bn_e4 = nn.BatchNorm1d(self.latent_dims)
+        self.bn_e4 = nn.BatchNorm1d(self.latent_dims) if use_batchnorm else identity
 
 
         # Decoding layers
         self.fc_d    = nn.Linear(self.latent_dims, self.flat * 4)
-        self.bn_d1   = nn.BatchNorm1d(self.flat * 4)
+        self.bn_d1   = nn.BatchNorm1d(self.flat * 4) if use_batchnorm else identity
         self.deConv1 = nn.ConvTranspose2d(self.filters * 16, self.filters * 8, 3,
                                           stride=2, padding=0)
-        self.bn_d2   = nn.BatchNorm2d(self.filters * 8)
+        self.bn_d2   = nn.BatchNorm2d(self.filters * 8) if use_batchnorm else identity
         self.deConv2 = nn.ConvTranspose2d(self.filters * 8, self.filters * 4, 3,
                                           stride=2, padding=1)
-        self.bn_d3   = nn.BatchNorm2d(self.filters * 4)
+        self.bn_d3   = nn.BatchNorm2d(self.filters * 4) if use_batchnorm else identity
         self.deConv3 = nn.ConvTranspose2d(self.filters * 4, self.filters * 2, 3,
                                           stride=2, padding=1)
-        self.bn_d4   = nn.BatchNorm2d(self.filters * 2)
+        self.bn_d4   = nn.BatchNorm2d(self.filters * 2) if use_batchnorm else identity
         self.deConv4 = nn.ConvTranspose2d(self.filters * 2, self.filters, 3,
                                           stride=2, padding=1)
-        self.bn_d5   = nn.BatchNorm2d(self.filters)
+        self.bn_d5   = nn.BatchNorm2d(self.filters) if use_batchnorm else identity
         self.conv_d  = nn.Conv2d(self.filters, self.img_chns, 4, 
                                  stride=1, padding=1)
 
@@ -76,8 +175,12 @@ class VAE(nn.Module):
         #print(h3.shape)
         h4 = h3.view(-1, self.flat * 4)
         #print(h4.shape)
-        mu = self.relu(self.bn_e4(self.fc_m(h4)))
-        logvar = self.relu(self.bn_e4(self.fc_s(h4)))
+        # mu = self.relu(self.bn_e4(self.fc_m(h4)))
+        # logvar = self.relu(self.bn_e4(self.fc_s(h4)))
+        # mu = self.relu(self.bn_e4(self.fc_m(h4)))
+        # logvar = self.relu(self.bn_e4(self.fc_s(h4)))
+        mu = self.fc_m(h4)
+        logvar = self.fc_s(h4)
         return mu, logvar
 
     def reparametrize(self, mu, logvar):
