@@ -23,6 +23,7 @@ from artemis.plotting.db_plotting import dbplot, hold_dbplots
 from src.VAE_with_Disc import VAE
 from src.gqn.gqn_draw import generator_rnn
 from src.gqn.gqn_params import set_gqn_param, get_gqn_param
+from src.peters_stuff.gqn_pose_predictor import convlstm_position_to_image_decoder
 from src.peters_stuff.image_crop_generator import iter_bboxes_from_positions, iter_pos_random, batch_crop
 
 
@@ -92,6 +93,41 @@ class GQNCropPredictor(ICropPredictor):
     @staticmethod
     def get_constructor():
         return lambda batch_size, image_size: GQNCropPredictor(batch_size=batch_size, image_size=image_size)
+
+
+class GQNCropPredictor2(ICropPredictor):
+
+    def __init__(self, batch_size, image_size, n_maps=256, canvas_channels=256, sequence_size=12):
+        # set_gqn_param('POSE_CHANNELS', 2)
+        # enc_h, enc_w = get_gqn_param('ENC_HEIGHT'), get_gqn_param('ENC_WIDTH')
+        g = Namespace()
+        g.positions = tf.placeholder(dtype=tf.float32, shape=(batch_size, 2))
+        g.targets = tf.placeholder(dtype=tf.float32, shape=(batch_size, *image_size, 3))
+        # g.representations = tf.zeros(dtype=tf.float32, shape=(batch_size, enc_h, enc_w, 1))
+        g.mu_targ = convlstm_position_to_image_decoder(query_poses=g.positions, image_shape=image_size[:2] + (3,), cell_downsample=4, n_maps=n_maps, canvas_channels=canvas_channels, sequence_size=sequence_size)
+        g.loss = tf.reduce_mean((g.mu_targ-g.targets)**2)
+        g.update_op = AdamOptimizer().minimize(g.loss)
+        sess = tf.Session()
+        sess.run(tf.global_variables_initializer())
+        self.g = g
+        self.sess = sess
+
+    def train(self, positions, image_crops):
+        image_crops = imbatch_to_feat(image_crops, channel_first=False, datarange=(-1, 1))
+        predicted_imgs, _, loss = self.sess.run([self.g.mu_targ, self.g.update_op, self.g.loss] , feed_dict={self.g.positions: positions, self.g.targets: image_crops})
+
+        # with hold_dbplots(draw_every=10):  # Just check that data normalization is right
+        #     dbplot(predicted_imgs, 'preed')
+        #     dbplot(image_crops, 'crooops')
+        return feat_to_imbatch(predicted_imgs, channel_first=False, datarange=(-1, 1)), loss
+
+    def predict(self, positions):
+        predicted_imgs, _, loss = self.sess.run([self.g.mu_targ] , feed_dict={self.g.positions: positions})
+        return feat_to_imbatch(predicted_imgs, channel_first=False, datarange=(-1, 1)), loss
+
+    @staticmethod
+    def get_constructor(n_maps=256, canvas_channels=256, sequence_size=12):
+        return lambda batch_size, image_size: GQNCropPredictor2(batch_size=batch_size, image_size=image_size, n_maps=n_maps, canvas_channels=canvas_channels, sequence_size=sequence_size)
 
 
 class DeconvCropPredictor(ICropPredictor):
@@ -196,15 +232,20 @@ X64 = X.add_variant(filters = 64, n_iter=10000)
 X128 = X.add_variant(filters = 128, n_iter=10000)
 X256 = X.add_variant(filters = 256, n_iter=10000)
 
-demo_train_just_vae_on_images_gqn.add_config_variant('gqn1', model_constructor = GQNCropPredictor.get_constructor)
+Xgqn=demo_train_just_vae_on_images_gqn.add_config_variant('gqn1', model_constructor = GQNCropPredictor.get_constructor)
+Xgqn2=demo_train_just_vae_on_images_gqn.add_config_variant('gqn2', model_constructor = GQNCropPredictor2.get_constructor)
 
+Xgqn2.add_variant(n_maps=64, canvas_channels=64)
+Xgqn2.add_variant(n_maps=64, canvas_channels=32)
 
 if __name__ == '__main__':
+    # Xgqn.call()
+    # Xgqn2.run()
+    # Xgqn2_params.call()
     # X64.run()
     # X32.run()
     # X64.run()
     # X128.run()
-    # demo_train_just_vae_on_images.browse()
     # demo_train_just_vae_on_images_gqn()
     demo_train_just_vae_on_images_gqn.browse(raise_display_errors=True)
 

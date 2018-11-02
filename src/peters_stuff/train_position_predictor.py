@@ -1,11 +1,14 @@
 from __future__ import print_function
 
+import string
 from abc import abstractmethod
+import random
 
 import numpy as np
 import tensorflow as tf
 import time
 from argparse import Namespace
+from artemis.fileman.local_dir import get_artemis_data_path
 from tensorflow.python.training.adam import AdamOptimizer
 from torch.distributions import LogNormal
 from torch.nn.functional import binary_cross_entropy
@@ -25,7 +28,7 @@ from artemis.plotting.db_plotting import dbplot, hold_dbplots, DBPlotTypes
 from src.VAE_with_Disc import VAE, get_encoding_convnet
 from src.gqn.gqn_draw import generator_rnn
 from src.gqn.gqn_params import set_gqn_param, get_gqn_param
-from src.peters_stuff.gqn_pose_predictor import query_pos_inference_rnn, shortened_gqn_prediction_rnn
+from src.peters_stuff.gqn_pose_predictor import query_pos_inference_rnn, convlstm_image_to_position_encoder
 from src.peters_stuff.image_crop_generator import iter_bboxes_from_positions, iter_pos_random, batch_crop
 
 
@@ -343,7 +346,7 @@ class GQNPositionPredictor(IPositionPredictor):
 
     def train(self, image_crops, positions):
         image_crops = imbatch_to_feat(image_crops, channel_first=False, datarange=(-1, 1))
-        predicted_positions, _, loss = self.sess.run([self.g.mu_targ, self.g.update_op, self.g.loss] , feed_dict={self.g.target_positions: positions, self.g.target_frames: image_crops})
+        predicted_positions, _, loss = self.sess.run([self.g.mu_targ, self.g.update_op, self.g.loss], feed_dict={self.g.target_positions: positions, self.g.target_frames: image_crops})
 
         # with hold_dbplots(draw_every=10):  # Just check that data normalization is right
         #     dbplot(predicted_imgs, 'preed')
@@ -367,18 +370,10 @@ class GQNPositionPredictor2(IPositionPredictor):
 
     def __init__(self, batch_size, image_size, cell_downsample=4, n_maps=32):
         set_gqn_param('POSE_CHANNELS', 2)
-        # enc_h, enc_w = get_gqn_param('ENC_HEIGHT'), get_gqn_param('ENC_WIDTH')
         g = Namespace()
-        # g.positions = tf.placeholder(dtype=tf.float32, shape=(batch_size, 2))
         g.target_frames = tf.placeholder(dtype=tf.float32, shape=(batch_size, *image_size, 3))
         g.target_positions = tf.placeholder(dtype=tf.float32, shape=(batch_size, 2))
-        # g.representations = tf.zeros(dtype=tf.float32, shape=(batch_size, enc_h, enc_w, 1))
-        # g.mu_targ, _ = query_pos_inference_rnn(representations=g.representations, target_frames=g.target_frames, sequence_size=12, **rnn_params)
-
-
-        g.mu_targ, _ = shortened_gqn_prediction_rnn(image=g.target_frames, cell_downsample=cell_downsample, n_maps=n_maps)
-
-
+        g.mu_targ, _ = convlstm_image_to_position_encoder(image=g.target_frames, cell_downsample=cell_downsample, n_maps=n_maps)
         g.loss = tf.reduce_mean((g.mu_targ-g.target_positions)**2)
         g.update_op = AdamOptimizer().minimize(g.loss)
         sess = tf.Session()
@@ -389,21 +384,37 @@ class GQNPositionPredictor2(IPositionPredictor):
     def train(self, image_crops, positions):
         image_crops = imbatch_to_feat(image_crops, channel_first=False, datarange=(-1, 1))
         predicted_positions, _, loss = self.sess.run([self.g.mu_targ, self.g.update_op, self.g.loss] , feed_dict={self.g.target_positions: positions, self.g.target_frames: image_crops})
-
-        # with hold_dbplots(draw_every=10):  # Just check that data normalization is right
-        #     dbplot(predicted_imgs, 'preed')
-        #     dbplot(image_crops, 'crooops')
         return predicted_positions, loss
 
     def predict(self, positions):
         raise NotImplementedError()
-        # predicted_imgs, _, loss = self.sess.run([self.g.mu_targ] , feed_dict={self.g.positions: positions})
-        # return feat_to_imbatch(predicted_imgs, channel_first=False, datarange=(-1, 1)), loss
 
     @staticmethod
     def get_constructor(n_maps=32):
         return lambda batch_size, image_size: GQNPositionPredictor2(batch_size=batch_size, image_size=image_size, n_maps=n_maps)
 
+    def __getstate__(self):
+        dir = get_artemis_data_path(f'models/testestencoder/{randstr(6)}', make_local_dir=True)
+        builder = tf.saved_model.builder.SavedModelBuilder(dir)
+        builder.add_meta_graph_and_variables(self.sess, tags = [], )
+        builder.save()
+
+        d = self.__dict__.copy()
+        del d['sess']
+        del d['g']
+        d['savedir'] = dir
+        return d
+
+    def __setstate__(self, state):
+        with tf.Session(graph=tf.Graph()) as sess:
+            tf.saved_model.loader.load(sess, tags=[], export_dir=state['savedir'])
+        del state['savedir']
+        for k, v in state.items():
+            setattr(self, k, v)
+
+
+def randstr(n):
+    return ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(n))
 
 
 @ExperimentFunction(is_root=True, compare=get_timeseries_record_comparison_function(yfield='rel_error'), one_liner_function=lambda result: f'iter:{result[-1]["iter"]}, rel_error:[min:{min(result[:, "rel_error"]):.3g}, final:{result[-1, "rel_error"]:.3g} ]')
