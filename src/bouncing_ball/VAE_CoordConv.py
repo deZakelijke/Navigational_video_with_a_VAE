@@ -77,9 +77,40 @@ class VAE(nn.Module):
         self.relu = nn.ReLU()
         self.sigmoid = nn.Sigmoid()
 
+    def add_coordinate_channels(self, x):
+        batch_size = x.shape[0]
+
+        xx_ones = torch.ones([batch_size, x.shape[2]], dtype=torch.int64)
+        xx_ones = xx_ones.unsqueeze(-1)
+
+        xx_range = torch.arange(x.shape[2]).unsqueeze(0).repeat([batch_size, 1])
+        xx_range = xx_range.unsqueeze(1)
+
+        xx_channel = torch.matmul(xx_range, xx_ones) 
+        xx_channel.unsqueeze(-1)
+
+        yy_ones = torch.ones([batch_size, x.shape[3]], dtype=torch.int64)
+        yy_ones.unsqueeze(-1)
+
+        yy_range = torch.arange(x.shape[3]).unsqueeze(0).repeat([batch_size, 1])
+        yy_range.unsqueeze(1)
+
+        yy_channel = torch.matmul(yy_range, yy_ones) 
+        yy_channel.unsqueeze(-1)
+
+        xx_channel.float()
+        yy_channel.float()
+        xx_channel = xx_channel / (x.shape[2] - 1) * 2 - 1
+        yy_channel = yy_channel / (x.shape[3] - 1) * 2 - 1
+
+        ret = torch.cat([x, xx_channel, yy_channel], axis=-1)
+        return ret
+
     def encode(self, x):
         #print("x", x.shape)
-        h1 = self.relu(self.bn_e1(self.conv1(x)))
+        x_with_coords = self.add_coordinate_channels(x)
+        #print(f"x with coords {x_with_coords.shape})
+        h1 = self.relu(self.bn_e1(self.conv1(x_with_coords)))
         #print(h1.shape)
         h2 = self.relu(self.bn_e2(self.conv2(h1)))
         #print(h2.shape)
@@ -137,11 +168,6 @@ class VAE(nn.Module):
         recon_x = self.decode(z_x)
         return recon_x, mu, logvar
 
-    # def loss_function(self, recon_x, x, mu, logvar, recon_x_disc = None, labels = None):
-    #     BCE = F.binary_cross_entropy(recon_x, x, size_average = False)
-    #     KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-    #     DL  = F.binary_cross_entropy(recon_x_disc, labels)
-    #     return BCE + KLD, DL
     def loss_function(self, recon_x, x, mu, logvar):
         BCE = F.binary_cross_entropy(recon_x, x, reduction='sum')
         KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
@@ -208,114 +234,3 @@ class TemporallySmoothVAETrainer:
         self.opt.step()
         return vae_loss
 
-
-
-
-
-class Discriminator(nn.Module):
-    """
-
-    """
-    def __init__(self, latent_dims=8, image_size=(64, 64)):
-        super().__init__()
-
-        self.filters = 64
-        self.flat = 512 * 4 * 4
-        self.img_chns = 3
-
-        self.conv1 = nn.Conv2d(self.img_chns, self.filters, (2, 2), stride = 2)
-        self.conv2 = nn.Conv2d(self.filters, self.filters * 2, (2, 2), stride = 2)
-        self.bn1   = nn.BatchNorm2d(self.filters * 2)
-        self.conv3 = nn.Conv2d(self.filters * 2, self.filters * 4, (2, 2), stride = 2)
-        self.bn2   = nn.BatchNorm2d(self.filters * 4)
-        self.conv4 = nn.Conv2d(self.filters * 4, self.filters * 8, (2, 2), stride = 2)
-        self.bn3   = nn.BatchNorm2d(self.filters * 8)
-        self.fc    = nn.Linear(self.flat, 1)
-
-        self.relu = nn.ReLU()
-        self.sigmoid = nn.Sigmoid()
-
-
-    def discriminate(self, x):
-        h1 = self.relu(self.conv1(x))
-        h2 = self.bn1(self.relu(self.conv2(h1)))
-        h3 = self.bn2(self.relu(self.conv3(h2)))
-        h4 = self.bn3(self.relu(self.conv4(h3)))
-        h5 = h4.view(-1, self.flat)
-        return self.sigmoid(self.fc(h5))
-
-    def forward(self, x):
-        return self.discriminate(x)
-
-    def loss_function(self, disc_x, labels):
-        BCE = F.binary_cross_entropy(disc_x, labels, reduction='sum')
-        return BCE
-
-
-
-class VAEGAN:
-
-    def __init__(self, VAE_model, GAN_model, VAE_opt, GAN_opt, latent_dims, cuda):
-        self.VAE_model = VAE_model
-        self.GAN_model = GAN_model
-        self.VAE_opt = VAE_opt
-        self.GAN_opt = GAN_opt
-        self.cuda = cuda
-        self.latent_dims = latent_dims
-
-    @classmethod
-    def from_init(cls, latent_dims, image_size, learning_rate, cuda):
-        VAE_model = VAE(latent_dims, image_size).float()
-        GAN_model = Discriminator(latent_dims, image_size).float()
-        if cuda:
-            VAE_model.cuda()
-            GAN_model.cuda()
-        VAE_opt = optim.Adam(VAE_model.parameters(), lr = learning_rate, betas = (0.5, 0.999))
-        GAN_opt = optim.Adam(GAN_model.parameters(), lr = learning_rate, betas = (0.5, 0.999))
-        return VAEGAN(VAE_model=VAE_model, GAN_model=GAN_model, VAE_opt=VAE_opt, GAN_opt=GAN_opt, cuda = cuda, latent_dims=latent_dims)
-
-    def train_step(self, data):
-        labels = torch.zeros(data.shape[0], 1)
-        labels = Variable(labels).float()
-        noise_variable = torch.zeros(data.shape[0], self.latent_dims).float().normal_()
-        noise_variable = Variable(noise_variable).float()
-        data = Variable(data)
-        if self.cuda:
-            data = data.cuda()
-            labels = labels.cuda()
-            noise_variable = noise_variable.cuda()
-
-        # Optimize discriminator
-        self.GAN_model.zero_grad()
-        labels.fill_(1)
-
-        predicted_real_labels  = self.GAN_model(data)
-        real_GAN_loss = self.GAN_model.loss_function(predicted_real_labels, labels)
-        real_GAN_loss.backward()
-
-        gen_data = self.VAE_model.decode(noise_variable)
-        labels.fill_(0)
-        predicted_fake_labels = self.GAN_model(gen_data.detach())
-        fake_GAN_loss = self.GAN_model.loss_function(predicted_fake_labels, labels)
-        fake_GAN_loss.backward()
-        self.GAN_opt.step()
-
-        GAN_loss = real_GAN_loss.data[0] + fake_GAN_loss.data[0]
-
-        # Optimize VAE
-        self.VAE_model.zero_grad()
-        recon_batch, mu, logvar = self.VAE_model(data)
-
-        labels.fill_(1)
-        predicted_gen_labels = self.GAN_model.discriminate(recon_batch)
-        # rec_loss, gen_loss = self.VAE_model.loss_function(recon_batch, data, mu,
-        #                                              logvar, predicted_gen_labels, labels)
-        rec_loss = self.VAE_model.loss_function(recon_batch, data, mu, logvar)
-        gen_loss = F.binary_cross_entropy(predicted_gen_labels, labels)
-        rec_loss.backward(retain_graph = True)
-        gen_loss.backward()
-        self.VAE_opt.step()
-
-        VAE_loss = rec_loss.data[0] + gen_loss.data[0]
-
-        return VAE_loss, GAN_loss
