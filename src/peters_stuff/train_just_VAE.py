@@ -1,5 +1,7 @@
 from __future__ import print_function
 
+from collections import namedtuple
+
 import numpy as np
 import torch
 import torch.utils.data
@@ -14,6 +16,7 @@ from artemis.plotting.db_plotting import dbplot, hold_dbplots
 from src.VAE_with_Disc import VAEGAN, VAE, VAETrainer, TemporallySmoothVAETrainer
 from src.peters_stuff.image_crop_generator import get_image_batch_crop_generator
 from src.peters_stuff.sweeps import generate_linear_sweeps
+import tensorflow as tf
 
 
 @experiment_function

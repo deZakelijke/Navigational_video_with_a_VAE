@@ -80,22 +80,22 @@ class VAE(nn.Module):
     def add_coordinate_channels(self, x):
         batch_size = x.shape[0]
 
-        xx_ones = torch.ones([batch_size, x.shape[2]], dtype=int)
-        xx_ones.unsqueeze(-1)
+        xx_ones = torch.ones([batch_size, x.shape[2]], dtype=torch.int64)
+        xx_ones = xx_ones.unsqueeze(-1)
 
         xx_range = torch.arange(x.shape[2]).unsqueeze(0).repeat([batch_size, 1])
-        xx_range.unsqueeze(1)
+        xx_range = xx_range.unsqueeze(1)
 
-        xx_channel = torch.matmul(xx_ones, xx_range) 
+        xx_channel = torch.matmul(xx_range, xx_ones) 
         xx_channel.unsqueeze(-1)
 
-        yy_ones = torch.ones([batch_size, x.shape[3]], dtype=int)
+        yy_ones = torch.ones([batch_size, x.shape[3]], dtype=torch.int64)
         yy_ones.unsqueeze(-1)
 
         yy_range = torch.arange(x.shape[3]).unsqueeze(0).repeat([batch_size, 1])
         yy_range.unsqueeze(1)
 
-        yy_channel = torch.matmul(yy_ones, yy_range) 
+        yy_channel = torch.matmul(yy_range, yy_ones) 
         yy_channel.unsqueeze(-1)
 
         xx_channel.float()

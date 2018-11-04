@@ -10,9 +10,10 @@ from artemis.fileman.smart_io import smart_load_image
 from artemis.general.checkpoint_counter import Checkpoints, do_every
 from artemis.general.image_ops import resize_image
 from artemis.general.measuring_periods import measure_period
+from artemis.ml.tools.iteration import batchify_generator
 from artemis.plotting.db_plotting import dbplot, hold_dbplots, DBPlotTypes
 from src.VAE_with_Disc import VAEGAN, VAE, VAETrainer, TemporallySmoothVAETrainer
-from src.peters_stuff.image_crop_generator import get_image_batch_crop_generator
+from src.peters_stuff.image_crop_generator import iter_bboxes_from_positions, iter_pos_random, batch_crop
 from src.peters_stuff.sweeps import generate_linear_sweeps
 
 
@@ -63,12 +64,21 @@ def demo_train_just_vae_on_images(
     # for i, image_crops in enumerate(get_celeb_a_iterator(minibatch_size=batch_size, size=image_size)):
     # mode = 'smooth'
     mode = 'random'
-    for i, (bboxes, image_crops) in enumerate(get_image_batch_crop_generator(img=img, crop_size=image_size, batch_size=batch_size, mode=mode, speed=10, randomness=0.1)):
+
+    batched_bbox_generator = batchify_generator(list(
+        iter_bboxes_from_positions(
+            img_size=img.shape[:2],
+            crop_size=image_size,
+            position_generator=iter_pos_random(n_dim=2, rng=None),
+        ) for _ in range(batch_size)))
+
+    for i, (bboxes, image_crops) in enumerate(batched_bbox_generator):
 
         if n_iter is not None and i>=n_iter:
             break
 
         # dbplot(image_crops, 'crops')
+        image_crops = (batch_crop(img=img, bboxes=bboxes).astype(np.float32))
 
         image_crops = (image_crops.astype(np.float32))/256
 
