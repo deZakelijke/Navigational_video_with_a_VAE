@@ -53,7 +53,7 @@ class VAE(nn.Module):
         self.bn_d1   = nn.BatchNorm1d(self.flat * 4)
         #self.deConv1 = nn.ConvTranspose2d(self.filters * 16, self.filters * 8, 3,
         #                                  stride=2, padding=0)
-        self.deConv1 = nn.ConvTranspose2d(self.filters * 64, self.filters * 8, 3,
+        self.deConv1 = nn.ConvTranspose2d(self.filters * 64 + 2, self.filters * 8, 3,
                                           stride=2, padding=0)
 
         self.bn_d2   = nn.BatchNorm2d(self.filters * 8)
@@ -142,8 +142,9 @@ class VAE(nn.Module):
         #print(h1.shape)
         #h2 = h1.view(-1, self.flat // 4, 4, 4)
         h2 = h1.view(-1, self.flat, 2, 2)
+        h2_coords = self.add_coordinate_channels(h2)
         #print(h2.shape)
-        h3 = self.relu(self.bn_d2(self.deConv1(h2)))
+        h3 = self.relu(self.bn_d2(self.deConv1(h2_coords)))
         #print(h3.shape)
         h4 = self.relu(self.bn_d3(self.deConv2(h3)))
         #print(h4.shape)
