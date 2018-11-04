@@ -37,7 +37,7 @@ class VAE(nn.Module):
         self.intermediate_dim_disc = 32 * 60 * 60
 
         # Encoding layers for the mean and logvar of the latent space
-        self.conv1 = nn.Conv2d(self.img_chns, self.filters, 3, stride=2, padding=1)
+        self.conv1 = nn.Conv2d(self.img_chns + 2, self.filters, 3, stride=2, padding=1)
         self.bn_e1 = nn.BatchNorm2d(self.filters)
         self.conv2 = nn.Conv2d(self.filters, self.filters * 2, 3, stride=2, padding=1)
         self.bn_e2 = nn.BatchNorm2d(self.filters * 2)
@@ -86,24 +86,27 @@ class VAE(nn.Module):
         xx_range = torch.arange(x.shape[2]).unsqueeze(0).repeat([batch_size, 1])
         xx_range = xx_range.unsqueeze(1)
 
-        xx_channel = torch.matmul(xx_range, xx_ones) 
-        xx_channel.unsqueeze(-1)
+        xx_channel = torch.matmul(xx_ones, xx_range) 
+        xx_channel = xx_channel.unsqueeze(1)
 
         yy_ones = torch.ones([batch_size, x.shape[3]], dtype=torch.int64)
-        yy_ones.unsqueeze(-1)
+        yy_ones = yy_ones.unsqueeze(-1)
 
         yy_range = torch.arange(x.shape[3]).unsqueeze(0).repeat([batch_size, 1])
-        yy_range.unsqueeze(1)
+        yy_range = yy_range.unsqueeze(1)
 
-        yy_channel = torch.matmul(yy_range, yy_ones) 
-        yy_channel.unsqueeze(-1)
+        yy_channel = torch.matmul(yy_ones, yy_range) 
+        yy_channel = yy_channel.unsqueeze(1)
 
-        xx_channel.float()
-        yy_channel.float()
+        xx_channel = xx_channel.float()
+        yy_channel = yy_channel.float()
+        if x.is_cuda:
+            xx_channel = xx_channel.cuda()
+            yy_channel = yy_channel.cuda()
         xx_channel = xx_channel / (x.shape[2] - 1) * 2 - 1
         yy_channel = yy_channel / (x.shape[3] - 1) * 2 - 1
 
-        ret = torch.cat([x, xx_channel, yy_channel], axis=-1)
+        ret = torch.cat([x, xx_channel, yy_channel], dim=1)
         return ret
 
     def encode(self, x):
