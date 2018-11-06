@@ -97,6 +97,25 @@ def iter_bboxes_from_positions(img_size, crop_size, position_generator):
         yield generate_relative_position_crop(img_size=img_size, crop_size=crop_size, crop_position=rel_position)
 
 
+def iter_bbox_batches(image_shape, crop_size, batch_size, position_generator_constructor ='random', rng=None):
+    if isinstance(position_generator_constructor, str):
+        if position_generator_constructor== 'random':
+            position_generator_constructor = lambda: iter_pos_random(n_dim=2, rng=rng)
+        else:
+            raise NotImplementedError(position_generator_constructor)
+    else:
+        position_generator_constructor = position_generator_constructor
+
+    batched_bbox_generator = batchify_generator(list(
+            iter_bboxes_from_positions(
+                img_size=image_shape,
+                crop_size=crop_size,
+                position_generator=position_generator_constructor(),
+            ) for _ in range(batch_size)))
+
+    yield from batched_bbox_generator
+
+
 def batch_crop(img, bboxes):
 
     first = crop_img_with_bbox(img, bbox = bboxes[0], crop_edge_setting='error')

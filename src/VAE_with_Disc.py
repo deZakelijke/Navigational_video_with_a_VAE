@@ -8,6 +8,11 @@ from torchvision import datasets, transforms
 
 from artemis.plotting.db_plotting import dbplot
 
+class Identity(nn.Module):
+
+    def forward(self, x):
+        return x
+
 
 class VAE(nn.Module):
     """ Class that combines a VAE and a GAN in one generative model
@@ -38,14 +43,14 @@ class VAE(nn.Module):
 
         # Encoding layers for the mean and logvar of the latent space
         self.conv1 = nn.Conv2d(self.img_chns, self.filters, 3, stride=2, padding=1)
-        self.bn_e1 = nn.BatchNorm2d(self.filters)
+        self.bn_e1 = nn.BatchNorm2d(self.filters) if use_batchnorm else Identity()
         self.conv2 = nn.Conv2d(self.filters, self.filters * 2, 3, stride=2, padding=1)
-        self.bn_e2 = nn.BatchNorm2d(self.filters * 2)
+        self.bn_e2 = nn.BatchNorm2d(self.filters * 2) if use_batchnorm else Identity()
         self.conv3 = nn.Conv2d(self.filters * 2, self.filters * 4, 3, stride=2, padding=1)
-        self.bn_e3 = nn.BatchNorm2d(self.filters * 4)
+        self.bn_e3 = nn.BatchNorm2d(self.filters * 4) if use_batchnorm else Identity()
         self.fc_m  = nn.Linear(self.flat, self.latent_dims)
         self.fc_s  = nn.Linear(self.flat, self.latent_dims)
-        self.bn_e4 = nn.BatchNorm1d(self.latent_dims)
+        self.bn_e4 = nn.BatchNorm1d(self.latent_dims) if use_batchnorm else Identity()
 
 
         # Decoding layers

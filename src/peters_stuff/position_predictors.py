@@ -1,35 +1,16 @@
-from __future__ import print_function
-
-import string
 from abc import abstractmethod
-import random
+from argparse import Namespace
+from collections import namedtuple
+from typing import Callable, Tuple
 
 import numpy as np
 import tensorflow as tf
-import time
-from argparse import Namespace
-from artemis.fileman.local_dir import get_artemis_data_path
 from tensorflow.python.training.adam import AdamOptimizer
-from torch.distributions import LogNormal
-from torch.nn.functional import binary_cross_entropy
-from typing import Callable, Tuple, Iterator
 
-from artemis.experiments.decorators import ExperimentFunction
-from artemis.experiments.experiment_record_view import get_timeseries_record_comparison_function, \
-    timeseries_oneliner_function, get_timeseries_oneliner_function
-from artemis.fileman.file_getter import get_file
-from artemis.fileman.smart_io import smart_load_image
-from artemis.general.checkpoint_counter import Checkpoints, do_every
-from artemis.general.deferred_defaults import default
-from artemis.general.duck import Duck
-from artemis.general.image_ops import resize_image
-from artemis.ml.tools.iteration import batchify_generator
-from artemis.plotting.db_plotting import dbplot, hold_dbplots, DBPlotTypes
-from src.VAE_with_Disc import VAE, get_encoding_convnet
-from src.gqn.gqn_draw import generator_rnn
-from src.gqn.gqn_params import set_gqn_param, get_gqn_param
+from src.VAE_with_Disc import VAE
+from src.gqn.gqn_params import set_gqn_param
 from src.peters_stuff.gqn_pose_predictor import query_pos_inference_rnn, convlstm_image_to_position_encoder
-from src.peters_stuff.image_crop_generator import iter_bboxes_from_positions, iter_pos_random, batch_crop
+from src.peters_stuff.tf_helpers import TFGraphClass
 
 
 class IPositionPredictor(object):
@@ -63,43 +44,6 @@ def feat_to_imbatch(feat, channel_first, datarange):
     dmin, dmax = datarange
     feat = (((feat-dmin)/(dmax-dmin))*255.999).astype(np.uint8)
     return feat
-
-
-
-#
-# class GQNCropPredictor(IPositionPredictor):
-#
-#     def __init__(self, batch_size, image_size):
-#         set_gqn_param('POSE_CHANNELS', 2)
-#         enc_h, enc_w = get_gqn_param('ENC_HEIGHT'), get_gqn_param('ENC_WIDTH')
-#         g = Namespace()
-#         g.positions = tf.placeholder(dtype=tf.float32, shape=(batch_size, 2))
-#         g.targets = tf.placeholder(dtype=tf.float32, shape=(batch_size, *image_size, 3))
-#         g.representations = tf.zeros(dtype=tf.float32, shape=(batch_size, enc_h, enc_w, 1))
-#         g.mu_targ, _ = generator_rnn(representations=g.representations, query_poses=g.positions, sequence_size=12)
-#         g.loss = tf.reduce_mean((g.mu_targ-g.targets)**2)
-#         g.update_op = AdamOptimizer().minimize(g.loss)
-#         sess = tf.Session()
-#         sess.run(tf.global_variables_initializer())
-#         self.g = g
-#         self.sess = sess
-#
-#     def train(self, image_crops, positions, ):
-#         image_crops = imbatch_to_feat(image_crops, channel_first=False, datarange=(-1, 1))
-#         predicted_imgs, _, loss = self.sess.run([self.g.mu_targ, self.g.update_op, self.g.loss] , feed_dict={self.g.positions: positions, self.g.targets: image_crops})
-#
-#         # with hold_dbplots(draw_every=10):  # Just check that data normalization is right
-#         #     dbplot(predicted_imgs, 'preed')
-#         #     dbplot(image_crops, 'crooops')
-#         return feat_to_imbatch(predicted_imgs, channel_first=False, datarange=(-1, 1)), loss
-#
-#     def predict(self, positions):
-#         predicted_imgs, _, loss = self.sess.run([self.g.mu_targ] , feed_dict={self.g.positions: positions})
-#         return feat_to_imbatch(predicted_imgs, channel_first=False, datarange=(-1, 1)), loss
-#
-#     @staticmethod
-#     def get_constructor():
-#         return lambda batch_size, image_size: GQNCropPredictor(batch_size=batch_size, image_size=image_size)
 
 
 def _get_named_opt(name, parameters, learning_rate, weight_decay = 0.):
@@ -145,7 +89,6 @@ class ConvnetPositionPredictor(IPositionPredictor):
     @staticmethod
     def get_constructor(learning_rate=1e-3, filters=32, img_channels = 3, use_batchnorm = True, opt='sgd', weigth_decay=0.):
         return lambda batch_size, image_size: ConvnetPositionPredictor(image_size=image_size, learning_rate=learning_rate, filters=filters, img_channels=img_channels, use_batchnorm=use_batchnorm, weigth_decay=weigth_decay)
-
 
 
 class ConvnetPositionPredictor2(IPositionPredictor):
@@ -243,7 +186,6 @@ class ConvnetPositionPredictor2(IPositionPredictor):
         return lambda batch_size, image_size: ConvnetPositionPredictor2(image_size=image_size, learning_rate=learning_rate, filters=filters, img_channels=img_channels)
 
 
-
 class ConvnetGridPredictor(IPositionPredictor):
 
     def __init__(self, image_size, learning_rate=1e-3, filters=32, img_channels=3, use_batchnorm=True, gridsize= (10, 10), opt='sgd'):
@@ -306,8 +248,6 @@ class ConvnetGridPredictor2(IPositionPredictor):
         return lambda batch_size, image_size: ConvnetGridPredictor2(image_size=image_size, learning_rate=learning_rate, filters=filters, img_channels=img_channels, use_batchnorm=use_batchnorm, opt=opt, gridsize=gridsize, weight_decay=weight_decay)
 
 
-
-
 def bbox_to_position(bboxes, image_size, crop_size):
     return np.array(bboxes)[:, [1, 0]] / (image_size[0] - crop_size[0], image_size[1] - crop_size[1]) - 0.5
 
@@ -320,7 +260,6 @@ def position_to_bbox(positions, image_size, crop_size, clip=False):
     unnorm_positions = ((np.array(positions)+.5)[:, [1, 0]] * (image_size[0] - crop_size[0], image_size[1] - crop_size[1])).astype(np.int)
     bboxes = np.concatenate([unnorm_positions, unnorm_positions+crop_size], axis=1)
     return bboxes
-
 
 
 class GQNPositionPredictor(IPositionPredictor):
@@ -346,7 +285,7 @@ class GQNPositionPredictor(IPositionPredictor):
 
     def train(self, image_crops, positions):
         image_crops = imbatch_to_feat(image_crops, channel_first=False, datarange=(-1, 1))
-        predicted_positions, _, loss = self.sess.run([self.g.mu_targ, self.g.update_op, self.g.loss], feed_dict={self.g.target_positions: positions, self.g.target_frames: image_crops})
+        predicted_positions, _, loss = self.sess.run([self.g.mu_targ, self.g.update_op, self.g.loss] , feed_dict={self.g.target_positions: positions, self.g.target_frames: image_crops})
 
         # with hold_dbplots(draw_every=10):  # Just check that data normalization is right
         #     dbplot(predicted_imgs, 'preed')
@@ -393,165 +332,35 @@ class GQNPositionPredictor2(IPositionPredictor):
     def get_constructor(n_maps=32):
         return lambda batch_size, image_size: GQNPositionPredictor2(batch_size=batch_size, image_size=image_size, n_maps=n_maps)
 
-    def __getstate__(self):
-        dir = get_artemis_data_path(f'models/testestencoder/{randstr(6)}', make_local_dir=True)
-        builder = tf.saved_model.builder.SavedModelBuilder(dir)
-        builder.add_meta_graph_and_variables(self.sess, tags = [], )
-        builder.save()
 
-        d = self.__dict__.copy()
-        del d['sess']
-        del d['g']
-        d['savedir'] = dir
-        return d
-
-    def __setstate__(self, state):
-        with tf.Session(graph=tf.Graph()) as sess:
-            tf.saved_model.loader.load(sess, tags=[], export_dir=state['savedir'])
-        del state['savedir']
-        for k, v in state.items():
-            setattr(self, k, v)
+PositionPredictorNodes = namedtuple('PositionPredictorNodes', ['batch_size', 'crops', 'predicted_positions', 'target_positions', 'loss', 'update_op'])
 
 
-def randstr(n):
-    return ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(n))
+class GQNPositionPredictor3(TFGraphClass[PositionPredictorNodes]):
+    """
 
+    """
 
-@ExperimentFunction(is_root=True, compare=get_timeseries_record_comparison_function(yfield='rel_error'), one_liner_function=lambda result: f'iter:{result[-1]["iter"]}, rel_error:[min:{min(result[:, "rel_error"]):.3g}, final:{result[-1, "rel_error"]:.3g} ]')
-def demo_train_position_predictor(
-        model_constructor: Callable[[int, Tuple[int,int]], IPositionPredictor],
-        position_generator_constructor: Callable[[], Iterator[Tuple[int, int]]] = 'default',
-        batch_size=64,
-        checkpoints='60s',
-        crop_size = (64, 64),
-        # image_cut_size = (128, 128),  # (y, x)
-        image_cut_size = (512, 512),  # (y, x)
-        n_iter = 10000,
-        append_position_maps = False,
-        ):
+    def train(self, image_crops, positions):
+        image_crops = imbatch_to_feat(image_crops, channel_first=False, datarange=(-1, 1))
+        predicted_positions, _, loss = self.sess.run([self.nodes.predicted_positions, self.nodes.update_op, self.nodes.loss] , feed_dict={self.nodes.target_positions: positions, self.nodes.crops: image_crops, self.nodes.batch_size: len(image_crops)})
+        return predicted_positions, loss
 
-    if isinstance(position_generator_constructor, str):
-        if position_generator_constructor=='default':
-            position_generator_constructor = lambda: iter_pos_random(n_dim=2, rng=None)
-        else:
-            raise NotImplementedError(position_generator_constructor)
+    def predict(self, image_crops):
+        image_crops = imbatch_to_feat(image_crops, channel_first=False, datarange=(-1, 1))
+        predicted_positions, = self.sess.run([self.nodes.predicted_positions], feed_dict={self.nodes.crops: image_crops, self.nodes.batch_size: len(image_crops)})
+        return predicted_positions
 
-    is_checkpoint = Checkpoints(checkpoints)
+    @staticmethod
+    def get_constructor(n_maps=32, cell_downsample=4):
 
-    img = resize_image(smart_load_image(get_file('data/images/sistine_chapel.jpg', url='https://drive.google.com/uc?export=download&id=1g4HOxo2doBL6aPgYFoiqgLC8Mkinqao6')), width=2000, mode='preserve_aspect')
+        def constructor(batch_size, image_size):
+            batch_size = tf.placeholder(tf.int32, [], name='batch_size')  # Yes it's silly but we have to
+            crops = tf.placeholder(dtype=tf.float32, shape=(None, *image_size, 3))
+            target_positions = tf.placeholder(dtype=tf.float32, shape=(None, 2))
+            predicted_positions, _ = convlstm_image_to_position_encoder(image=crops, batch_size=batch_size, cell_downsample=cell_downsample, n_maps=n_maps, n_pose_channels=2)
+            loss = tf.reduce_mean((predicted_positions-target_positions)**2)
+            update_op = AdamOptimizer().minimize(loss)
+            return GQNPositionPredictor3(nodes=PositionPredictorNodes(crops=crops, predicted_positions=predicted_positions, target_positions=target_positions, loss=loss, update_op=update_op, batch_size=batch_size))
 
-    img = img[img.shape[0]//2-image_cut_size[0]//2:img.shape[0]//2+image_cut_size[0]//2, img.shape[1]//2-image_cut_size[1]//2:img.shape[1]//2+image_cut_size[1]//2]  # TODO: Revert... this is just to test on a smaller version
-    dbplot(img, 'full_img')
-
-    model = model_constructor(batch_size, crop_size)
-
-    duck = Duck()
-    batched_bbox_generator = batchify_generator(list(
-        iter_bboxes_from_positions(
-            img_size=img.shape[:2],
-            crop_size=crop_size,
-            position_generator=position_generator_constructor(),
-        ) for _ in range(batch_size)))
-
-    if append_position_maps:
-        position_maps = np.broadcast_to(feat_to_imbatch(np.array(np.meshgrid(*(np.linspace(0, 1, cs) for cs in crop_size)))[None], channel_first=True, datarange=(0, 1)), (batch_size, *crop_size, 2))
-
-    t_start = time.time()
-    for i, bboxes in enumerate(batched_bbox_generator):
-        if n_iter is not None and i>=n_iter:
-            break
-
-        image_crops = batch_crop(img=img, bboxes=bboxes)
-
-        if append_position_maps:
-            image_crops = np.concatenate([image_crops, position_maps], axis=-1)
-
-        positions = bbox_to_position(bboxes, image_size=img.shape[:2], crop_size=crop_size)
-
-        predicted_positions, training_loss = model.train(image_crops, positions)
-
-        error = np.abs(predicted_positions - positions).mean()
-
-        duck[next, :] = dict(iter=i, rel_error=error, elapsed=time.time()-t_start, training_loss=training_loss)
-
-        if do_every('5s'):
-            report = f'Iter: {i}, Rel Error: {error:3g}, Mean Rate: {i/(time.time()-t_start):.3g}iter/s'
-            print(report)
-            with hold_dbplots():
-                dbplot(image_crops[..., :3], 'crops')
-                predicted_bboxes = position_to_bbox(predicted_positions, image_size=img.shape[:2], crop_size=crop_size, clip=True)
-                dbplot(batch_crop(img=img, bboxes=predicted_bboxes), 'predicted_crops')
-                if append_position_maps:
-                    dbplot(np.rollaxis(image_crops[0, :, :, 3:], 2, 0), 'posmaps')
-                dbplot(duck[:, 'rel_error'].to_array(), plot_type=DBPlotTypes.LINE)
-                dbplot((positions[:, 0], positions[:, 1]), 'positions', plot_type=DBPlotTypes.SCATTER)
-                dbplot((predicted_positions[:, 0], predicted_positions[:, 1]), 'predicted_positions', plot_type=DBPlotTypes.SCATTER)
-                # dbplot(predicted_imgs, 'predicted_crops', cornertext=report)
-        if is_checkpoint():
-            yield duck
-
-    yield duck
-
-
-X = demo_train_position_predictor.add_config_root_variant('deconv1', model_constructor = ConvnetPositionPredictor.get_constructor)
-X32 = X.add_variant(filters = 32)
-X32.add_variant(opt='sgd')
-X32a = X32.add_variant(img_channels=5, append_position_maps=True)
-X32b = X32.add_variant(use_batchnorm=False)
-X64 = X.add_variant(filters = 64)
-# X64a = X32.add_variant(img_channels=5, append_position_maps=True)
-# X64 = X.add_variant(filters = 64, n_iter=10000)
-X128 = X.add_variant(filters = 128)
-# X256 = X.add_variant(filters = 256, n_iter=10000)
-
-# demo_train_just_vae_on_images_gqn.add_config_variant('gqn1', model_constructor = GQNCropPredictor.get_constructor)
-
-Xgrid = demo_train_position_predictor.add_config_root_variant('convgrid', model_constructor = ConvnetGridPredictor.get_constructor)
-Xgrid.add_variant(opt='adam')
-Xgridsgd = Xgrid.add_variant(opt='sgd')
-Xgrid.add_variant(opt='sgd-mom')
-Xgrid.add_variant(opt='rmsprop')
-Xgridsgd.add_variant('posmaps', img_channels=5, append_position_maps=True)
-Xgridsgd.add_variant(learning_rate = 1e-2)
-Xgridsgd.add_variant(gridsize=(20, 20))
-Xgridsgd.add_variant(gridsize=(5, 5))
-Xgridsgd.add_variant(gridsize=(3, 3))
-Xgridsgd.add_variant(learning_rate = 1e-4)
-Xgridsgd.add_variant(use_batchnorm = False)
-Xgridsgd.add_variant(filters = 64)
-
-
-XV2 = demo_train_position_predictor.add_config_root_variant('convgrid2', model_constructor = ConvnetGridPredictor2.get_constructor)
-Xgqn = demo_train_position_predictor.add_config_root_variant('gqn', model_constructor = GQNPositionPredictor.get_constructor)
-Xgqn2 = demo_train_position_predictor.add_config_root_variant('gqn2', model_constructor = GQNPositionPredictor2.get_constructor)
-# Xgqn_params = Xgqn.add_variant(rnn_params = {})
-# Xgqn_params = Xgqn.add_variant(enc_h=4, enc_w = 4, rnn_params = dict(lstm_canvas_channels=64))
-# Xgqn_params = Xgqn.add_variant(enc_h=4, enc_w = 4, )
-
-
-Xgqn_THIS_WORKS_DONT_TOUCH = Xgqn.add_variant(rnn_params = dict(lstm_canvas_channels=0, lstm_output_channels=64, generator_input_channels=0, inference_input_channels=0))
-# Xgqn_params = Xgqn.add_variant(n_maps=32)
-
-if __name__ == '__main__':
-    # Xgqn_params.run()
-    # Xgqn_THIS_WORKS_DONT_TOUCH.call()
-    Xgqn2.call()
-    # X64.run()
-    # X32.call(learning_rate=1e-3)
-    # Xgrid.call(n_iter=100000)
-    # X32.call()
-    # Xgrid.call()
-    # X32a.run()
-    # X64.run()
-    # X128.run()
-    # demo_train_just_vae_on_images_gqn()
-    # demo_train_position_predictor.browse()
-    # XV2.call(opt='sgd', learning_rate = 1e-3, weight_decay=0.0001)
-    # Xgridsgd.get_variant(gridsize=(5, 5)).call()
-
-    # Xgqn.call()
-
-    # Xgridsgd.get_variant(gridsize=(5, 5)).call()
-    #
-    # demo_train_just_vae_on_images_gqn.get_variant('deconv1').run()
-    # demo_train_just_vae_on_images_gqn.get_variant('gqn1').call()
+        return constructor
