@@ -41,7 +41,7 @@ class VAE(nn.Module):
         batch_norm = False
 
         # Encoding layers for the mean and logvar of the latent space
-        self.conv1 = nn.Conv2d(self.img_chns + 2, self.filters, 3, stride=2, padding=1)
+        self.conv1 = nn.Conv2d(self.img_chns, self.filters, 3, stride=2, padding=1)
         self.bn_e1 = nn.BatchNorm2d(self.filters) if batch_norm else Identity()
         self.conv2 = nn.Conv2d(self.filters, self.filters * 2, 3, stride=2, padding=1)
         self.bn_e2 = nn.BatchNorm2d(self.filters * 2) if batch_norm else Identity()
@@ -116,6 +116,7 @@ class VAE(nn.Module):
     def encode(self, x):
         #print("x", x.shape)
         x_with_coords = self.add_coordinate_channels(x)
+        x_with_coords = x
         #print(f"x with coords {x_with_coords.shape})
         h1 = self.relu(self.bn_e1(self.conv1(x_with_coords)))
         #print(h1.shape)
