@@ -8,6 +8,9 @@ from torchvision import datasets, transforms
 
 from artemis.plotting.db_plotting import dbplot
 
+class Identity(nn.Module):
+    def forward(self, x):
+        return x
 
 class VAE(nn.Module):
     """ Class that combines a VAE and a GAN in one generative model
@@ -35,14 +38,15 @@ class VAE(nn.Module):
         self.flat = 512 * filters//8
         self.intermediate_dim2 = 64 // 2 - 5
         self.intermediate_dim_disc = 32 * 60 * 60
+        batch_norm = False
 
         # Encoding layers for the mean and logvar of the latent space
         self.conv1 = nn.Conv2d(self.img_chns + 2, self.filters, 3, stride=2, padding=1)
-        self.bn_e1 = nn.BatchNorm2d(self.filters)
+        self.bn_e1 = nn.BatchNorm2d(self.filters) if batch_norm else Identity()
         self.conv2 = nn.Conv2d(self.filters, self.filters * 2, 3, stride=2, padding=1)
-        self.bn_e2 = nn.BatchNorm2d(self.filters * 2)
+        self.bn_e2 = nn.BatchNorm2d(self.filters * 2) if batch_norm else Identity()
         self.conv3 = nn.Conv2d(self.filters * 2, self.filters * 4, 3, stride=2, padding=1)
-        self.bn_e3 = nn.BatchNorm2d(self.filters * 4)
+        self.bn_e3 = nn.BatchNorm2d(self.filters * 4) if batch_norm else Identity()
         self.fc_m  = nn.Linear(self.flat, self.latent_dims)
         self.fc_s  = nn.Linear(self.flat, self.latent_dims)
         self.bn_e4 = nn.BatchNorm1d(self.latent_dims)
@@ -50,22 +54,22 @@ class VAE(nn.Module):
 
         # Decoding layers
         self.fc_d    = nn.Linear(self.latent_dims, self.flat * 4)
-        self.bn_d1   = nn.BatchNorm1d(self.flat * 4)
+        self.bn_d1   = nn.BatchNorm1d(self.flat * 4) if batch_norm else Identity()
         #self.deConv1 = nn.ConvTranspose2d(self.filters * 16, self.filters * 8, 3,
         #                                  stride=2, padding=0)
         self.deConv1 = nn.ConvTranspose2d(self.filters * 64, self.filters * 8, 3,
                                           stride=2, padding=0)
 
-        self.bn_d2   = nn.BatchNorm2d(self.filters * 8)
+        self.bn_d2   = nn.BatchNorm2d(self.filters * 8) if batch_norm else Identity()
         self.deConv2 = nn.ConvTranspose2d(self.filters * 8, self.filters * 4, 3,
                                           stride=2, padding=1)
-        self.bn_d3   = nn.BatchNorm2d(self.filters * 4)
+        self.bn_d3   = nn.BatchNorm2d(self.filters * 4) if batch_norm else Identity()
         self.deConv3 = nn.ConvTranspose2d(self.filters * 4, self.filters * 2, 3,
                                           stride=2, padding=1)
-        self.bn_d4   = nn.BatchNorm2d(self.filters * 2)
+        self.bn_d4   = nn.BatchNorm2d(self.filters * 2) if batch_norm else Identity()
         self.deConv4 = nn.ConvTranspose2d(self.filters * 2, self.filters, 3,
                                           stride=2, padding=1)
-        self.bn_d5   = nn.BatchNorm2d(self.filters)
+        self.bn_d5   = nn.BatchNorm2d(self.filters) if batch_norm else Identity()
         #self.conv_d  = nn.Conv2d(self.filters, self.img_chns, 4, 
         #                         stride=1, padding=1)
         self.conv_d  = nn.Conv2d(self.filters, self.img_chns, 6, 
