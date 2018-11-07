@@ -142,6 +142,7 @@ class VAE(nn.Module):
 
     def decode(self, z):
         #print("z", z.shape)
+
         h1 = self.relu(self.bn_d1(self.fc_d(z)))
         #print(h1.shape)
         #h2 = h1.view(-1, self.flat // 4, 4, 4)

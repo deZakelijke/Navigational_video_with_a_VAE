@@ -2,8 +2,7 @@ import tensorflow as tf
 
 from src.gqn.gqn_draw import GeneratorLSTMCell, InferenceLSTMCell, _InferenceCellInput, GQNLSTMCell
 from src.gqn.gqn_params import PARAMS
-from src.gqn.gqn_utils import broadcast_pose, compute_eta_and_sample_z, eta, eta_g
-
+from src.gqn.gqn_utils import broadcast_pose, eta, eta_g
 
 
 def query_pos_inference_rnn(representations, target_frames, sequence_size=12, scope="GQN_RNN",
@@ -78,8 +77,8 @@ def broadcast_pose_to_map(vector, height, width, n_pose_channels):
   return vector
 
 
-def convlstm_image_to_position_encoder(image, cell_downsample = 4, n_maps=32, sequence_size=12, n_pose_channels=2):
-    batch_size, sy, sx, img_channels = image.get_shape().as_list()
+def convlstm_image_to_position_encoder(image, batch_size, cell_downsample = 4, n_maps=32, sequence_size=12, n_pose_channels=2):
+    batch_size_from_img, sy, sx, img_channels = image.get_shape().as_list()
     lstm = GQNLSTMCell(output_channels=n_maps,
                        input_shape=[sy//cell_downsample, sx//cell_downsample, None],
                        )
@@ -89,6 +88,8 @@ def convlstm_image_to_position_encoder(image, cell_downsample = 4, n_maps=32, se
         filters=n_maps, kernel_size=cell_downsample, strides=cell_downsample,
         padding='VALID', use_bias=False,
         name="DownsampleInferenceInputCanvasAndImage")
+
+    # with tf.variable_scope('ggggnnn', reuse=tf.AUTO_REUSE) as varscope:
     for step in range(sequence_size):
         hidden_state = hidden_state + input_canvas_and_image
         _, (cell_state, hidden_state) = lstm(inputs = {'input': input_canvas_and_image}, state = (cell_state, hidden_state))
@@ -98,13 +99,14 @@ def convlstm_image_to_position_encoder(image, cell_downsample = 4, n_maps=32, se
     return mu_q, sigma_q
 
 
-def convlstm_position_to_image_decoder(query_poses, image_shape, n_maps, canvas_channels, cell_downsample=4, sequence_size=12, output_kernel_size=5, n_pose_channels = 2, scope="GQN_RNN"):
+def convlstm_position_to_image_decoder(query_poses, image_shape, n_maps, canvas_channels, batch_size=None, cell_downsample=4, sequence_size=12, output_kernel_size=5, n_pose_channels = 2, scope="GQN_RNN", output_type = 'normal'):
     """
     Creates the computational graph for the DRAW module in generation mode.
     This is the test time setup where no posterior can be inferred from the
     target image.
     """
-    batch_size = query_poses.get_shape()[0]
+    if batch_size is None:
+        batch_size = query_poses.get_shape()[0]  # This will only work if they have fixed shape
     sy, sx, img_channels = image_shape
     height, width = sy//cell_downsample, sx//cell_downsample
     lstm = GQNLSTMCell(output_channels=n_maps, input_shape=[sy//cell_downsample, sx//cell_downsample, None])
@@ -114,13 +116,18 @@ def convlstm_position_to_image_decoder(query_poses, image_shape, n_maps, canvas_
 
     with tf.variable_scope(scope, reuse=tf.AUTO_REUSE) as varscope:
         for step in range(sequence_size):
-
             sub_output, (cell_state, hidden_state) = lstm({'inputs': query_poses}, state=(cell_state, hidden_state))
-
             canvas = canvas + tf.layers.conv2d_transpose(
                 sub_output, filters=canvas_channels, kernel_size=cell_downsample, strides=cell_downsample,
                 name="UpsampleGeneratorOutput")
 
-    mu_target = eta_g(canvas, channels=img_channels, scope="eta_g", kernel_size = output_kernel_size)
-    logvar_target = eta_g(canvas, channels=img_channels, scope="eta_g_var", kernel_size = output_kernel_size)
-    return mu_target, tf.nn.softplus(logvar_target)
+    if output_type=='normal':
+        mu_target = eta_g(canvas, channels=img_channels, scope="eta_g", kernel_size = output_kernel_size)
+        logvar_target = eta_g(canvas, channels=img_channels, scope="eta_g_var", kernel_size = output_kernel_size)
+        return mu_target, (tf.nn.softplus(logvar_target + .5) + 1e-8)
+    elif output_type=='bernoulli':
+        logit_mu = eta_g(canvas, channels=img_channels, scope="eta_g", kernel_size = output_kernel_size)
+        return logit_mu
+    else:
+
+        raise Exception(output_type)
