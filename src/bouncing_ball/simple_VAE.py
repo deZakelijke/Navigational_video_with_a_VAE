@@ -45,7 +45,7 @@ class VAE(nn.Module):
         #h8 = self.sigm(self.dec_std(h6))
         return h7
 
-    def reparametrise(self, mu, logvar):
+    def reparametrize(self, mu, logvar):
         if self.training:
             std = logvar.mul(0.5).exp_()
             eps = Variable(std.data.new(std.size()).normal_())
@@ -55,7 +55,7 @@ class VAE(nn.Module):
 
     def forward(self, x):
         mu, logvar = self.encode(x)
-        z = self.reparametrise(mu, logvar)
+        z = self.reparametrize(mu, logvar)
         mu2 = self.decode(z)
         #x_hat = (self.reparametrise(mu2, logvar2)).view(-1, 1, 30, 30)
         x_hat = mu2.view(-1, 1, 30, 30)
