@@ -4,6 +4,7 @@ import numpy as np
 from torch import nn, optim
 from torch.autograd import Variable
 from torchvision import datasets, transforms
+from torch.nn import functional as F
 
 
 class VAE(nn.Module):
@@ -59,7 +60,13 @@ class VAE(nn.Module):
         #x_hat = (self.reparametrise(mu2, logvar2)).view(-1, 1, 30, 30)
         x_hat = mu2.view(-1, 1, 30, 30)
         return x_hat, mu, logvar
-            
+
+    def loss_function(self, recon_x, x, mu, logvar):
+        BCE = F.binary_cross_entropy(recon_x, x, reduction='sum')
+        KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+        # DL  = F.binary_cross_entropy(recon_x_disc, labels)
+        return BCE + KLD
+           
 
 if __name__ == "__main__":
     pass
