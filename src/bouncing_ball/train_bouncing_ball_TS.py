@@ -10,8 +10,8 @@ import numpy as np
 import torch
 from src.VAE_with_Disc import TemporallySmoothVAETrainer
 from src.VAE_with_Disc import VAETrainer
-#from src.VAE_with_Disc import VAE
-from VAE_CoordConv import VAE
+from src.VAE_with_Disc import VAE
+#from VAE_CoordConv import VAE
 from map_latent_ball_points import map_images_to_points
 from BouncingBallLoader import BouncingBallLoader
 from artemis.experiments import experiment_function
@@ -77,4 +77,4 @@ def demo_train_bouncing_ball_generator(
 #                dbplot(plot_data, 'recons')
     
 if __name__ == '__main__':
-    demo_train_bouncing_ball_generator(cuda=True, batch_size=32)
+    demo_train_bouncing_ball_generator(coordinate_dims=2, cuda=True, batch_size=32)
