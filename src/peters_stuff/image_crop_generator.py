@@ -98,6 +98,8 @@ def iter_bboxes_from_positions(img_size, crop_size, position_generator):
 
 
 def iter_bbox_batches(image_shape, crop_size, batch_size, position_generator_constructor ='random', rng=None):
+
+    rng = get_rng(rng)
     if isinstance(position_generator_constructor, str):
         if position_generator_constructor== 'random':
             position_generator_constructor = lambda: iter_pos_random(n_dim=2, rng=rng)
@@ -124,7 +126,6 @@ def batch_crop(img, bboxes):
     for i, bbox in enumerate(bboxes[1:]):
         batch[i+1] = crop_img_with_bbox(img, bbox = bbox, crop_edge_setting='error')
     return batch
-
 
 
 if __name__ == "__main__":

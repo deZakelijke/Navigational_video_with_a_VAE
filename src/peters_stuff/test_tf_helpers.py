@@ -7,7 +7,8 @@ import tensorflow as tf
 from artemis.fileman.local_dir import get_artemis_data_path
 import os
 
-from src.peters_stuff.tf_helpers import save_model_and_graph, load_model_and_graph, TFGraphClass, hold_loading_scope
+from src.peters_stuff.tf_helpers import save_model_and_graph, load_model_and_graph, TFGraphClass, hold_loading_scope, \
+    replicate_subgraph
 
 
 def test_graph_save():
@@ -99,7 +100,7 @@ def test_graph_save_with_namedtuple():
         assert np.allclose(y1, y2)
 
 
-class MyConvObj(TFGraphClass):
+class MyConvObj(TFGraphClass[MyNodes]):
 
     def __init__(self, nodes: MyNodes, sess=None):
         TFGraphClass.__init__(self, sess=sess, nodes=nodes)
@@ -146,7 +147,20 @@ def test_serializable_obj():
     assert np.allclose(y1, y3)
 
 
+def test_duplicate_graph():
+
+    im = np.random.randn(5, 10, 10, 3)
+    obj = MyConvObj.from_graph(im_shape= im.shape)
+    ser_dir = obj.dump()
+
+    obj2 = TFGraphClass.load(ser_dir)  # type: MyConvObj
+
+    x1, y1 = replicate_subgraph(inputs=obj2.nodes.x, outputs = obj2.nodes.y)
+    raise NotImplementedError('Gave up')
+
+
 if __name__ == '__main__':
     # test_graph_save()
     # test_graph_save_with_namedtuple()
-    test_serializable_obj()
+    # test_serializable_obj()
+    test_duplicate_graph()
