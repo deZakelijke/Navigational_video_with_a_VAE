@@ -10,8 +10,9 @@ import numpy as np
 import torch
 from src.VAE_with_Disc import TemporallySmoothVAETrainer
 from src.VAE_with_Disc import VAETrainer
-from src.VAE_with_Disc import VAE
+#from src.VAE_with_Disc import VAE
 #from VAE_CoordConv import VAE
+from simple_VAE import VAE
 from map_latent_ball_points import map_images_to_points
 from BouncingBallLoader import BouncingBallLoader
 from artemis.experiments import experiment_function
@@ -40,7 +41,8 @@ def demo_train_bouncing_ball_generator(
         image_size = 30,
         n_steps = 16000,
         radii = 1.2,
-        save_file = 'results/TS_bouncing_ball_model.pt'
+        save_file = 'models/TS_bouncing_ball_model.pt',
+        epochs=100
         ):
 
     torch.manual_seed(seed)
@@ -52,20 +54,25 @@ def demo_train_bouncing_ball_generator(
 
     kwargs = {'num_workers': 1, 'pin_memory': True} if cuda else {}
 
-    vae = VAE(latent_dims=coordinate_dims, image_size=(image_size, image_size), channels=1)
+    #vae = VAE(latent_dims=coordinate_dims, image_size=(image_size, image_size), channels=1)
+    vae = VAE(latent_dims=coordinate_dims)
     if cuda:
         vae = vae.cuda()
 #    trainer = TemporallySmoothVAETrainer(vae, learning_rate, device)
     trainer = VAETrainer(vae, learning_rate)
     ball_dataset = DataLoader(BouncingBallLoader(n_steps=n_steps, save_positions=True), 
                                                  batch_size=batch_size, shuffle=False)
-    for i, data in enumerate(ball_dataset):
-        ball_images = Variable(data[0].float())
-        ball_positions = Variable(data[1].float())
-        if cuda:
-            ball_images = ball_images.cuda()
+    for epoch in range(epochs):
+        print(f"Epoch {epoch}")
+        vae.train()
+        for i, data in enumerate(ball_dataset):
+            ball_images = Variable(data[0].float())
+            ball_positions = Variable(data[1].float())
+            if cuda:
+                ball_images = ball_images.cuda()
 
-        train_loss = trainer.train_step(ball_images)
+            train_loss = trainer.train_step(ball_images)
+        vae.eval()
 
     torch.save(vae, save_file)
 #        if i in checkpoints.values():
