@@ -1,65 +1,21 @@
 from __future__ import print_function
 
-from abc import abstractmethod
-
-import numpy as np
-import tensorflow as tf
 import time
-from tensorflow.python.training.adam import AdamOptimizer
-from torch.nn.functional import binary_cross_entropy
 from typing import Callable, Tuple, Iterator
 
+import numpy as np
+
 from artemis.experiments.decorators import ExperimentFunction
-from artemis.experiments.experiment_record_view import get_timeseries_record_comparison_function, \
-    get_timeseries_oneliner_function
-from artemis.fileman.file_getter import get_file
-from artemis.fileman.smart_io import smart_load_image
+from artemis.experiments.experiment_record_view import get_timeseries_record_comparison_function
 from artemis.general.checkpoint_counter import Checkpoints, do_every
 from artemis.general.duck import Duck
-from artemis.general.image_ops import resize_image
 from artemis.ml.tools.iteration import batchify_generator
 from artemis.plotting.db_plotting import dbplot, hold_dbplots, DBPlotTypes
-from src.gqn.gqn_draw import generator_rnn
 from src.peters_stuff.image_crop_generator import iter_bboxes_from_positions, iter_pos_random, batch_crop
 from src.peters_stuff.position_predictors import IPositionPredictor, feat_to_imbatch, ConvnetPositionPredictor, \
     ConvnetGridPredictor, ConvnetGridPredictor2, bbox_to_position, position_to_bbox, GQNPositionPredictor, \
     GQNPositionPredictor2, GQNPositionPredictor3
 
-
-#
-# class GQNCropPredictor(IPositionPredictor):
-#
-#     def __init__(self, batch_size, image_size):
-#         set_gqn_param('POSE_CHANNELS', 2)
-#         enc_h, enc_w = get_gqn_param('ENC_HEIGHT'), get_gqn_param('ENC_WIDTH')
-#         g = Namespace()
-#         g.positions = tf.placeholder(dtype=tf.float32, shape=(batch_size, 2))
-#         g.targets = tf.placeholder(dtype=tf.float32, shape=(batch_size, *image_size, 3))
-#         g.representations = tf.zeros(dtype=tf.float32, shape=(batch_size, enc_h, enc_w, 1))
-#         g.mu_targ, _ = generator_rnn(representations=g.representations, query_poses=g.positions, sequence_size=12)
-#         g.loss = tf.reduce_mean((g.mu_targ-g.targets)**2)
-#         g.update_op = AdamOptimizer().minimize(g.loss)
-#         sess = tf.Session()
-#         sess.run(tf.global_variables_initializer())
-#         self.g = g
-#         self.sess = sess
-#
-#     def train(self, image_crops, positions, ):
-#         image_crops = imbatch_to_feat(image_crops, channel_first=False, datarange=(-1, 1))
-#         predicted_imgs, _, loss = self.sess.run([self.g.mu_targ, self.g.update_op, self.g.loss] , feed_dict={self.g.positions: positions, self.g.targets: image_crops})
-#
-#         # with hold_dbplots(draw_every=10):  # Just check that data normalization is right
-#         #     dbplot(predicted_imgs, 'preed')
-#         #     dbplot(image_crops, 'crooops')
-#         return feat_to_imbatch(predicted_imgs, channel_first=False, datarange=(-1, 1)), loss
-#
-#     def predict(self, positions):
-#         predicted_imgs, _, loss = self.sess.run([self.g.mu_targ] , feed_dict={self.g.positions: positions})
-#         return feat_to_imbatch(predicted_imgs, channel_first=False, datarange=(-1, 1)), loss
-#
-#     @staticmethod
-#     def get_constructor():
-#         return lambda batch_size, image_size: GQNCropPredictor(batch_size=batch_size, image_size=image_size)
 from src.peters_stuff.sample_data import SampleImages
 
 
@@ -70,8 +26,6 @@ def demo_train_position_predictor(
         batch_size=64,
         checkpoints='60s',
         crop_size = (64, 64),
-        # image_cut_size = (128, 128),  # (y, x)
-        image_cut_size = (512, 512),  # (y, x)
         n_iter = 10000,
         append_position_maps = False,
         save_model=False,

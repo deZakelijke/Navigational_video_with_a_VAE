@@ -199,7 +199,18 @@ def clip_to_range(val, minimum, maximum):
     return min(max(val, minimum), maximum)
 
 
-def clip_bbox_to_image(bbox, width, height):
+def shift_bbox(bbox, shift):
+    """
+    :param bbox: An LTRB bbox
+    :param shift: An (x, y) shift
+    :return: A new, shifted, ltrb bbox.
+    """
+    l, t, r, b = bbox
+    dx, dy = shift
+    return l+dx, t+dy, r+dx, b+dy
+
+
+def clip_bbox_to_image(bbox, width, height, preserve_size=False):
     """
     :param bbox: A ltrb 1-indexed bounding box.
     :param width: Image width
@@ -207,8 +218,13 @@ def clip_bbox_to_image(bbox, width, height):
     :return: A ltrb 1-indexed bounding box clipped to the image.
     """
     l, t, r, b = bbox
-    return clip_to_range(l, 1, width), clip_to_range(t, 1, height), clip_to_range(r, 1, width), clip_to_range(b, 1,
-                                                                                                              height),
+    if preserve_size:
+        sx, sy = r-l, b-t
+        lnew = clip_to_range(l, 1, width-sx)
+        tnew = clip_to_range(t, 1, height-sy)
+        return lnew, tnew, lnew+sx, tnew+sy
+    else:
+        return clip_to_range(l, 0, width), clip_to_range(t, 0, height), clip_to_range(r, 0, width), clip_to_range(b, 0, height)
 
 
 def crop_img_with_bbox(img, bbox, crop_edge_setting = 'cut'):
