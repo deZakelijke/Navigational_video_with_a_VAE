@@ -4,7 +4,6 @@ import numpy as np
 from torch import nn, optim
 from torch.autograd import Variable
 from torchvision import datasets, transforms
-from torch.nn import functional as F
 
 
 class VAE(nn.Module):
@@ -45,7 +44,7 @@ class VAE(nn.Module):
         #h8 = self.sigm(self.dec_std(h6))
         return h7
 
-    def reparametrize(self, mu, logvar):
+    def reparametrise(self, mu, logvar):
         if self.training:
             std = logvar.mul(0.5).exp_()
             eps = Variable(std.data.new(std.size()).normal_())
@@ -55,18 +54,12 @@ class VAE(nn.Module):
 
     def forward(self, x):
         mu, logvar = self.encode(x)
-        z = self.reparametrize(mu, logvar)
+        z = self.reparametrise(mu, logvar)
         mu2 = self.decode(z)
         #x_hat = (self.reparametrise(mu2, logvar2)).view(-1, 1, 30, 30)
         x_hat = mu2.view(-1, 1, 30, 30)
         return x_hat, mu, logvar
-
-    def loss_function(self, recon_x, x, mu, logvar):
-        BCE = F.binary_cross_entropy(recon_x, x, reduction='sum')
-        KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-        # DL  = F.binary_cross_entropy(recon_x_disc, labels)
-        return BCE + KLD
-           
+            
 
 if __name__ == "__main__":
     pass

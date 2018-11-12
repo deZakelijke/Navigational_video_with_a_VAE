@@ -85,8 +85,6 @@ def demo_train_image_generator(
 
         coordinates = convert_to_coordinates(bboxes)
         coordinates = torch.from_numpy(coordinates).float()
-        if cuda:
-            coordinates = coordinates.cuda()
 
         image_crops = (image_crops.astype(np.float32))/256
 
@@ -103,7 +101,8 @@ def demo_train_image_generator(
             with hold_dbplots():
                 dbplot(np.rollaxis(generated_images.detach().cpu().numpy(), 1, 4), 'recons')
 
+        break
 
 
 if __name__ == '__main__':
-    demo_train_image_generator(cuda=True)
+    demo_train_image_generator(cuda=False)
