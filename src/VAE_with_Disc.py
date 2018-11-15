@@ -40,7 +40,6 @@ class VAE(nn.Module):
         self.flat = 512 * filters//8
         self.intermediate_dim2 = 64 // 2 - 5
         self.intermediate_dim_disc = 32 * 60 * 60
-        use_batchnorm = False
 
         # Encoding layers for the mean and logvar of the latent space
         self.conv1 = nn.Conv2d(self.img_chns, self.filters, 3, stride=2, padding=1)
@@ -56,22 +55,22 @@ class VAE(nn.Module):
 
         # Decoding layers
         self.fc_d    = nn.Linear(self.latent_dims, self.flat * 4)
-        self.bn_d1   = nn.BatchNorm1d(self.flat * 4) if use_batchnorm else Identity()
+        self.bn_d1   = nn.BatchNorm1d(self.flat * 4)
         #self.deConv1 = nn.ConvTranspose2d(self.filters * 16, self.filters * 8, 3,
         #                                  stride=2, padding=0)
         self.deConv1 = nn.ConvTranspose2d(self.filters * 64, self.filters * 8, 3,
                                           stride=2, padding=0)
 
-        self.bn_d2   = nn.BatchNorm2d(self.filters * 8) if use_batchnorm else Identity()
+        self.bn_d2   = nn.BatchNorm2d(self.filters * 8)
         self.deConv2 = nn.ConvTranspose2d(self.filters * 8, self.filters * 4, 3,
                                           stride=2, padding=1)
-        self.bn_d3   = nn.BatchNorm2d(self.filters * 4) if use_batchnorm else Identity()
+        self.bn_d3   = nn.BatchNorm2d(self.filters * 4)
         self.deConv3 = nn.ConvTranspose2d(self.filters * 4, self.filters * 2, 3,
                                           stride=2, padding=1)
-        self.bn_d4   = nn.BatchNorm2d(self.filters * 2) if use_batchnorm else Identity()
+        self.bn_d4   = nn.BatchNorm2d(self.filters * 2)
         self.deConv4 = nn.ConvTranspose2d(self.filters * 2, self.filters, 3,
                                           stride=2, padding=1)
-        self.bn_d5   = nn.BatchNorm2d(self.filters) if use_batchnorm else Identity()
+        self.bn_d5   = nn.BatchNorm2d(self.filters)
         #self.conv_d  = nn.Conv2d(self.filters, self.img_chns, 4, 
         #                         stride=1, padding=1)
         self.conv_d  = nn.Conv2d(self.filters, self.img_chns, 6, 
