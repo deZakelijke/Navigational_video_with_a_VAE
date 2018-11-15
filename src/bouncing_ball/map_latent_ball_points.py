@@ -1,3 +1,5 @@
+import sys
+sys.path.append('/home/micha/Documents/repos/Navigational_video_with_a_VAE')
 import numpy as np
 import torch
 from matplotlib import pyplot as plt
@@ -11,7 +13,7 @@ from artemis.plotting.db_plotting import dbplot, hold_dbplots
 from artemis.general.image_ops import resize_image
 
 
-def plot_mapping(old_xy_points, new_xy_points):
+def plot_mapping(old_xy_points, new_xy_points, multi_dims):
     """
     :param old_xy_points: (2xN) array
     :param new_xy_points: (2xN) array
@@ -92,15 +94,6 @@ def random_samples(model, nr_samples, latent_dims, latent_range):
     print(images.shape)
     save_image(images, f"results/sample_image_range_minus_{latent_range}_to_{latent_range}.png", nrow=nr_samples)
 
-    ax = plt.subplot(1, 2, 1)
-    ax.scatter(old_xy_points[0], old_xy_points[1], c=colours)
-    ax.set_title('Ball locations')
-
-    ax = plt.subplot(1, 2, 2)
-    ax.scatter(new_xy_points[0], new_xy_points[1], c=colours)
-    ax.set_title('Z location')
-    plt.show()
-
 
 if __name__ == "__main__":
 
@@ -122,4 +115,3 @@ if __name__ == "__main__":
 
     #map_images_to_points(model, images, positions)
     plot_latent_variance(model, images, LATENT_DIMS)
-
