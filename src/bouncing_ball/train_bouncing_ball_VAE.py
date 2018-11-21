@@ -89,6 +89,8 @@ if __name__ == "__main__":
                                 help='Path to file to save model')
     parser.add_argument('--learning-rate', type=float, default=1e-3, metavar='L',
                                 help='The learning rate of the model')
+    parser.add_argument('--lambda', type-float, default=1.0, metavar='L',
+                                help='The regularizing term for the distance loss')
     
     args = parser.parse_args()
     args.cuda = args.cuda and torch.cuda.is_available()
@@ -104,11 +106,11 @@ if __name__ == "__main__":
                                batch_size=args.batch_size,
                                shuffle=True)
 
-    latent_dims = 8
+    latent_dims = 2
     desired_latent_dims = 2
     image_size = (30, 30)
     size = (1, *image_size)
-    lambda_reg = 1e-2
+    lambda_reg = args.lambda
     model = VAE(latent_dims, image_size, lambda_reg, desired_latent_dims).float()
     if args.cuda:
         model.cuda()
