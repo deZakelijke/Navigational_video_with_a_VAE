@@ -119,8 +119,9 @@ def load_bouncing_ball_data(resolution, n_steps, n_samples, save_positions=False
     positions = np.empty((n_steps, n_samples, N_BALLS, 2))
     for t, imgs in enumerate(generate_bouncing_ball_data(resolution=resolution, n_steps=n_steps, n_samples=n_samples, save_positions=save_positions, **kwargs)):
         data[t] = imgs[0]
+        if save_positions:
+            positions[t] = imgs[1]
     if save_positions:
-        positions[t] = imgs[1]
         return data, positions
     else:
         return data

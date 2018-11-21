@@ -9,13 +9,15 @@ from torch.nn import functional as F
 
 class VAE(nn.Module):
 
-    def __init__(self, latent_dims=2, image_size=(30, 30)):
+    def __init__(self, latent_dims=2, image_size=(30, 30), lambda_reg=1.0, desired_dims=2):
         super().__init__()
 
         self.latent_dims = latent_dims
         self.image_size = image_size
         self.intermediate_dims = 160
         self.flat_dims = 30 * 30
+        self.lambda_reg = lambda_reg
+        self.desired_dims = desired_dims
 
         self.enc1    = nn.Linear(self.flat_dims, self.intermediate_dims)
         self.enc2    = nn.Linear(self.intermediate_dims, self.intermediate_dims)
@@ -64,9 +66,20 @@ class VAE(nn.Module):
     def loss_function(self, recon_x, x, mu, logvar):
         BCE = F.binary_cross_entropy(recon_x, x, reduction='sum')
         KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-        # DL  = F.binary_cross_entropy(recon_x_disc, labels)
         return BCE + KLD
-           
+
+    def loss_function_with_SSV(self, recon_x, x, mu, logvar, position):
+        BCE = F.binary_cross_entropy(recon_x, x, reduction='sum')
+        KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+#        cov = logvar.exp() ** -1
+#        SSV = (position - mu[:, :self.desired_dims]) * cov[:, :self.desired_dims]
+#        print(SSV.t().shape)
+#        SSV = SSV.t() @ (position - mu[:, :self.desired_dims])
+#        print(SSV)
+        SSV = self.lambda_reg * F.mse_loss(mu[:, :self.desired_dims], position, reduction="sum")
+        #print(mu[:, :self.desired_dims])
+        return BCE + KLD + SSV
+          
 
 if __name__ == "__main__":
     pass
