@@ -26,6 +26,8 @@ def train(epoch, train_dataset, optimiser, use_positions=False):
         if use_positions:
             position = x[1]
             position = position.float().view(-1, desired_latent_dims)
+            if args.cuda:
+                position = position.cuda()
             x = x[0]
         x = Variable(x).float()
         if args.cuda:
@@ -49,6 +51,8 @@ def test(epoch, test_dataset, use_positions=False):
         if use_positions:
             position = x[1]
             position = position.float().view(-1, desired_latent_dims)
+            if args.cuda:
+                position = position.cuda()
             x = x[0]
         x = Variable(x).float()
         if args.cuda:
@@ -75,7 +79,7 @@ if __name__ == "__main__":
                                 help='input batch size for training (default: 32)')
     parser.add_argument('--epochs', type=int, default=10, metavar='N',
                                 help='number of epochs to train (default: 10)')
-    parser.add_argument('--cuda', action='store_true', default=False,
+    parser.add_argument('--cuda', action='store_true', default=True,
                                 help='enables CUDA training')
     parser.add_argument('--seed', type=int, default=1, metavar='S',
                                 help='random seed (default: 1)')
@@ -110,29 +114,28 @@ if __name__ == "__main__":
         model.cuda()
     optimiser = optim.Adam(model.parameters(), lr=args.learning_rate)
 
-    for epoch in range(1, args.epochs + 1):
-        try:
+    try:
+        for epoch in range(1, args.epochs + 1):
             train(epoch, train_dataset, optimiser, use_positions)
             test(epoch, test_dataset, use_positions)
 
-        except KeyboardInterrupt:
-            print("Manual quitting")
-            sys.exit(0)
-        finally:
-            if epoch % 100 == 0:
-                print("Creating random sample")
-                sample = Variable(torch.randn(36, latent_dims))
-                if args.cuda:
-                    sample = sample.cuda()
-                sample = model.decode(sample).cpu()
-                save_image(sample.data.view(36, *size), "results/sample_{}.png".format(
-                    epoch))
+    except KeyboardInterrupt:
+        print("Manual quitting")
+        sys.exit(0)
+    finally:
+        print("Creating random sample")
+        sample = Variable(torch.randn(36, latent_dims))
+        if args.cuda:
+            sample = sample.cuda()
+        sample = model.decode(sample).cpu()
+        save_image(sample.data.view(36, *size), "results/sample_{}.png".format(
+            epoch))
 
-                print("Saving model")
-                save_file = "{}bouncing_ball_model_epoch_{}_batch_size_{}.pt".format(
-                            args.save_path,
-                            epoch,
-                            args.batch_size)
-                torch.save(model, save_file)
+        print("Saving model")
+        save_file = "{}bouncing_ball_model_epoch_{}_batch_size_{}.pt".format(
+                    args.save_path,
+                    epoch,
+                    args.batch_size)
+        torch.save(model, save_file)
 
 

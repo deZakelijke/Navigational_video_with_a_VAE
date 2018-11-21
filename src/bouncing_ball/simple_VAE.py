@@ -71,11 +71,6 @@ class VAE(nn.Module):
     def loss_function_with_SSV(self, recon_x, x, mu, logvar, position):
         BCE = F.binary_cross_entropy(recon_x, x, reduction='sum')
         KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-#        cov = logvar.exp() ** -1
-#        SSV = (position - mu[:, :self.desired_dims]) * cov[:, :self.desired_dims]
-#        print(SSV.t().shape)
-#        SSV = SSV.t() @ (position - mu[:, :self.desired_dims])
-#        print(SSV)
         SSV = self.lambda_reg * F.mse_loss(mu[:, :self.desired_dims], position, reduction="sum")
         #print(mu[:, :self.desired_dims])
         return BCE + KLD + SSV
