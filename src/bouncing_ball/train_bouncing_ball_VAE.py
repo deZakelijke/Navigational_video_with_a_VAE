@@ -89,7 +89,7 @@ if __name__ == "__main__":
                                 help='Path to file to save model')
     parser.add_argument('--learning-rate', type=float, default=1e-3, metavar='L',
                                 help='The learning rate of the model')
-    parser.add_argument('--lambda', type-float, default=1.0, metavar='L',
+    parser.add_argument('--lambda_reg', type=float, default=1.0, metavar='L',
                                 help='The regularizing term for the distance loss')
     
     args = parser.parse_args()
@@ -106,11 +106,11 @@ if __name__ == "__main__":
                                batch_size=args.batch_size,
                                shuffle=True)
 
-    latent_dims = 2
+    latent_dims = 20
     desired_latent_dims = 2
     image_size = (30, 30)
     size = (1, *image_size)
-    lambda_reg = args.lambda
+    lambda_reg = args.lambda_reg
     model = VAE(latent_dims, image_size, lambda_reg, desired_latent_dims).float()
     if args.cuda:
         model.cuda()
@@ -120,6 +120,8 @@ if __name__ == "__main__":
         for epoch in range(1, args.epochs + 1):
             train(epoch, train_dataset, optimiser, use_positions)
             test(epoch, test_dataset, use_positions)
+            if epoch == 1000:
+                model.lambda_reg = 0
 
     except KeyboardInterrupt:
         print("Manual quitting")
@@ -134,7 +136,7 @@ if __name__ == "__main__":
             epoch))
 
         print("Saving model")
-        save_file = f"{args.save_path}bouncing_ball_model_epoch_{epochs}_batch_size_{args.batch_size}_lambda_{args.lambda}.pt"
+        save_file = f"{args.save_path}bouncing_ball_model_epoch_{epoch}_batch_size_{args.batch_size}_lambda_{args.lambda_reg}.pt"
         torch.save(model, save_file)
 
 
