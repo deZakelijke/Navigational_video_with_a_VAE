@@ -134,10 +134,7 @@ if __name__ == "__main__":
             epoch))
 
         print("Saving model")
-        save_file = "{}bouncing_ball_model_epoch_{}_batch_size_{}.pt".format(
-                    args.save_path,
-                    epoch,
-                    args.batch_size)
+        save_file = f"{args.save_path}bouncing_ball_model_epoch_{epochs}_batch_size_{args.batch_size}_lambda_{args.lambda}.pt"
         torch.save(model, save_file)
 
 
