@@ -8,6 +8,9 @@ from torchvision import datasets, transforms
 
 from artemis.plotting.db_plotting import dbplot
 
+class Identity(nn.Module):
+    def forward(self, x):
+        return x
 
 class VAE(nn.Module):
     """ Class that combines a VAE and a GAN in one generative model
@@ -35,14 +38,15 @@ class VAE(nn.Module):
         self.flat = 512 * filters//8
         self.intermediate_dim2 = 64 // 2 - 5
         self.intermediate_dim_disc = 32 * 60 * 60
+        batch_norm = False
 
         # Encoding layers for the mean and logvar of the latent space
         self.conv1 = nn.Conv2d(self.img_chns, self.filters, 3, stride=2, padding=1)
-        self.bn_e1 = nn.BatchNorm2d(self.filters)
+        self.bn_e1 = nn.BatchNorm2d(self.filters) if batch_norm else Identity()
         self.conv2 = nn.Conv2d(self.filters, self.filters * 2, 3, stride=2, padding=1)
-        self.bn_e2 = nn.BatchNorm2d(self.filters * 2)
+        self.bn_e2 = nn.BatchNorm2d(self.filters * 2) if batch_norm else Identity()
         self.conv3 = nn.Conv2d(self.filters * 2, self.filters * 4, 3, stride=2, padding=1)
-        self.bn_e3 = nn.BatchNorm2d(self.filters * 4)
+        self.bn_e3 = nn.BatchNorm2d(self.filters * 4) if batch_norm else Identity()
         self.fc_m  = nn.Linear(self.flat, self.latent_dims)
         self.fc_s  = nn.Linear(self.flat, self.latent_dims)
         self.bn_e4 = nn.BatchNorm1d(self.latent_dims)
@@ -50,22 +54,22 @@ class VAE(nn.Module):
 
         # Decoding layers
         self.fc_d    = nn.Linear(self.latent_dims, self.flat * 4)
-        self.bn_d1   = nn.BatchNorm1d(self.flat * 4)
+        self.bn_d1   = nn.BatchNorm1d(self.flat * 4) if batch_norm else Identity()
         #self.deConv1 = nn.ConvTranspose2d(self.filters * 16, self.filters * 8, 3,
         #                                  stride=2, padding=0)
         self.deConv1 = nn.ConvTranspose2d(self.filters * 64, self.filters * 8, 3,
                                           stride=2, padding=0)
 
-        self.bn_d2   = nn.BatchNorm2d(self.filters * 8)
+        self.bn_d2   = nn.BatchNorm2d(self.filters * 8) if batch_norm else Identity()
         self.deConv2 = nn.ConvTranspose2d(self.filters * 8, self.filters * 4, 3,
                                           stride=2, padding=1)
-        self.bn_d3   = nn.BatchNorm2d(self.filters * 4)
+        self.bn_d3   = nn.BatchNorm2d(self.filters * 4) if batch_norm else Identity()
         self.deConv3 = nn.ConvTranspose2d(self.filters * 4, self.filters * 2, 3,
                                           stride=2, padding=1)
-        self.bn_d4   = nn.BatchNorm2d(self.filters * 2)
+        self.bn_d4   = nn.BatchNorm2d(self.filters * 2) if batch_norm else Identity()
         self.deConv4 = nn.ConvTranspose2d(self.filters * 2, self.filters, 3,
                                           stride=2, padding=1)
-        self.bn_d5   = nn.BatchNorm2d(self.filters)
+        self.bn_d5   = nn.BatchNorm2d(self.filters) if batch_norm else Identity()
         #self.conv_d  = nn.Conv2d(self.filters, self.img_chns, 4, 
         #                         stride=1, padding=1)
         self.conv_d  = nn.Conv2d(self.filters, self.img_chns, 6, 
@@ -86,29 +90,33 @@ class VAE(nn.Module):
         xx_range = torch.arange(x.shape[2]).unsqueeze(0).repeat([batch_size, 1])
         xx_range = xx_range.unsqueeze(1)
 
-        xx_channel = torch.matmul(xx_range, xx_ones) 
-        xx_channel.unsqueeze(-1)
+        xx_channel = torch.matmul(xx_ones, xx_range) 
+        xx_channel = xx_channel.unsqueeze(1)
 
         yy_ones = torch.ones([batch_size, x.shape[3]], dtype=torch.int64)
-        yy_ones.unsqueeze(-1)
+        yy_ones = yy_ones.unsqueeze(-1)
 
         yy_range = torch.arange(x.shape[3]).unsqueeze(0).repeat([batch_size, 1])
-        yy_range.unsqueeze(1)
+        yy_range = yy_range.unsqueeze(1)
 
-        yy_channel = torch.matmul(yy_range, yy_ones) 
-        yy_channel.unsqueeze(-1)
+        yy_channel = torch.matmul(yy_ones, yy_range) 
+        yy_channel = yy_channel.unsqueeze(1)
 
-        xx_channel.float()
-        yy_channel.float()
+        xx_channel = xx_channel.float()
+        yy_channel = yy_channel.float()
+        if x.is_cuda:
+            xx_channel = xx_channel.cuda()
+            yy_channel = yy_channel.cuda()
         xx_channel = xx_channel / (x.shape[2] - 1) * 2 - 1
         yy_channel = yy_channel / (x.shape[3] - 1) * 2 - 1
 
-        ret = torch.cat([x, xx_channel, yy_channel], axis=-1)
+        ret = torch.cat([x, xx_channel, yy_channel], dim=1)
         return ret
 
     def encode(self, x):
         #print("x", x.shape)
         x_with_coords = self.add_coordinate_channels(x)
+        x_with_coords = x
         #print(f"x with coords {x_with_coords.shape})
         h1 = self.relu(self.bn_e1(self.conv1(x_with_coords)))
         #print(h1.shape)
@@ -140,6 +148,7 @@ class VAE(nn.Module):
         #print(h1.shape)
         #h2 = h1.view(-1, self.flat // 4, 4, 4)
         h2 = h1.view(-1, self.flat, 2, 2)
+        #h2_coords = self.add_coordinate_channels(h2)
         #print(h2.shape)
         h3 = self.relu(self.bn_d2(self.deConv1(h2)))
         #print(h3.shape)

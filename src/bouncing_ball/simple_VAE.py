@@ -4,17 +4,20 @@ import numpy as np
 from torch import nn, optim
 from torch.autograd import Variable
 from torchvision import datasets, transforms
+from torch.nn import functional as F
 
 
 class VAE(nn.Module):
 
-    def __init__(self, latent_dims=2, image_size=(30, 30)):
+    def __init__(self, latent_dims=2, image_size=(30, 30), lambda_reg=1.0, desired_dims=2):
         super().__init__()
 
         self.latent_dims = latent_dims
         self.image_size = image_size
         self.intermediate_dims = 160
         self.flat_dims = 30 * 30
+        self.lambda_reg = lambda_reg
+        self.desired_dims = desired_dims
 
         self.enc1    = nn.Linear(self.flat_dims, self.intermediate_dims)
         self.enc2    = nn.Linear(self.intermediate_dims, self.intermediate_dims)
@@ -44,7 +47,7 @@ class VAE(nn.Module):
         #h8 = self.sigm(self.dec_std(h6))
         return h7
 
-    def reparametrise(self, mu, logvar):
+    def reparametrize(self, mu, logvar):
         if self.training:
             std = logvar.mul(0.5).exp_()
             eps = Variable(std.data.new(std.size()).normal_())
@@ -54,12 +57,23 @@ class VAE(nn.Module):
 
     def forward(self, x):
         mu, logvar = self.encode(x)
-        z = self.reparametrise(mu, logvar)
+        z = self.reparametrize(mu, logvar)
         mu2 = self.decode(z)
         #x_hat = (self.reparametrise(mu2, logvar2)).view(-1, 1, 30, 30)
         x_hat = mu2.view(-1, 1, 30, 30)
         return x_hat, mu, logvar
-            
+
+    def loss_function(self, recon_x, x, mu, logvar):
+        BCE = F.binary_cross_entropy(recon_x, x, reduction='sum')
+        KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+        return BCE + KLD
+
+    def loss_function_with_SSV(self, recon_x, x, mu, logvar, position):
+        BCE = F.binary_cross_entropy(recon_x, x, reduction='sum')
+        KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+        PDL = self.lambda_reg * F.mse_loss(mu[:, :self.desired_dims], position, reduction="sum")
+        return BCE + KLD + PDL
+          
 
 if __name__ == "__main__":
     pass

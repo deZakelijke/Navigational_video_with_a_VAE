@@ -1,12 +1,19 @@
+import sys
+sys.path.append('/home/micha/Documents/repos/Navigational_video_with_a_VAE')
 import numpy as np
 import torch
 from matplotlib import pyplot as plt
 from bouncing_balls import *
-from simple_VAE import VAE
+from src.peters_stuff.sweeps import generate_linear_sweeps
+#from simple_VAE import VAE
+#from VAE_CoordConv import VAE
 from torch.autograd import Variable
+from torchvision.utils import save_image
+from artemis.plotting.db_plotting import dbplot, hold_dbplots
+from artemis.general.image_ops import resize_image
 
 
-def plot_mapping(old_xy_points, new_xy_points):
+def plot_mapping(old_xy_points, new_xy_points, multi_dims, important_dims):
     """
     :param old_xy_points: (2xN) array
     :param new_xy_points: (2xN) array
@@ -16,14 +23,82 @@ def plot_mapping(old_xy_points, new_xy_points):
                          (old_xy_points.max(axis=1, keepdims=True) - old_xy_points.min(axis=1, keepdims=True))
     colours = [(y, x, 1-x) for x, y in old_xy_points_norm.T]
 
-    ax = plt.subplot(1, 2, 1)
+    ax = plt.subplot(2, 2, 1)
     ax.scatter(old_xy_points[0], old_xy_points[1], c=colours)
     ax.set_title('Ball locations')
 
-    ax = plt.subplot(1, 2, 2)
+    ax = plt.subplot(2, 2, 2)
     ax.scatter(new_xy_points[0], new_xy_points[1], c=colours)
-    ax.set_title('Z location')
+    ax.set_title('Z location (0, 1) with MLP')
+
+    if multi_dims and len(important_dims) > 2:
+        ax = plt.subplot(2, 2, 3)
+        ax.scatter(new_xy_points[0], new_xy_points[important_dims[2]], c=colours)
+        ax.set_title(f'Z location (0, {important_dims[2]}) with MLP')
+
+        ax = plt.subplot(2, 2, 4)
+        ax.scatter(new_xy_points[1], new_xy_points[important_dims[2]], c=colours)
+        ax.set_title(f'Z location (1, {important_dims[2]}) with MLP')
+
+        #ax = plt.subplot(2, 3, 5)
+        #ax.scatter(new_xy_points[0], new_xy_points[3], c=colours)
+        #ax.set_title('Z location (0, 3) with CoordinateConvolution')
+
+        #ax = plt.subplot(2, 3, 6)
+        #ax.scatter(new_xy_points[2], new_xy_points[3], c=colours)
+        #ax.set_title('Z location (2, 3) with CoordinateConvolution')
+
+
     plt.show()
+
+def map_images_to_points(model, images, positions, important_dims):
+    flat_coordinates_old = np.array([list(coordinates[0][0]) for coordinates in positions]).T
+
+    model.eval()
+    images = torch.from_numpy(images).float()
+    latent_points = model.reparametrize(*model.encode(images))
+
+    flat_coordinates_new = [list(coordinates) for coordinates in latent_points.data.numpy()]
+    flat_coordinates_new = np.array(flat_coordinates_new).T
+    if flat_coordinates_new.shape[0] > 2:
+        multi_dims = True
+    else:
+        multi_dims = False
+    plot_mapping(flat_coordinates_old, flat_coordinates_new, multi_dims, important_dims)
+
+def plot_latent_variance(model, images, latent_dims):
+    images = torch.from_numpy(images).float()
+    latent_points = model.encode(images)
+    latent_points = (latent_points[0].detach().numpy(), latent_points[1].detach().numpy())
+    important_dims = []
+    for i in range(latent_points[1].T.shape[0]):
+        if min(latent_points[1].T[i]) < -1:
+            important_dims.append(i)
+    ax = plt.subplot(1, 2, 1)
+    ax.plot(latent_points[0].T, "*")
+    ax.set_title("Mean")
+    ax = plt.subplot(1, 2, 2)
+    ax.plot(latent_points[1].T, "*")
+    ax.set_title("Logvar")
+    plt.show()
+
+    return important_dims
+    
+def random_samples(model, nr_samples, latent_dims, latent_range, important_dims):
+    a = torch.linspace(-latent_range, latent_range, nr_samples)
+    b = torch.linspace(-latent_range, latent_range, nr_samples)
+    x_t = a.repeat(nr_samples).unsqueeze(1)
+    y_t = b.repeat(nr_samples, 1).t().contiguous().view(-1).unsqueeze(1)
+    latent_points = torch.cat([x_t, y_t], dim=-1)
+    if latent_dims > 2:
+        for _ in range(2, latent_dims):
+            latent_points = torch.cat([latent_points, torch.zeros((nr_samples ** 2, 1))], dim=-1)
+    #c = torch.linspace(-latent_range, latent_range, nr_samples)
+    #z_t = b.repeat(nr_samples, 1).t().contiguous().view(-1).unsqueeze(1)
+    #latent_points = torch.cat([
+
+    images = model.decode(latent_points).view(nr_samples ** 2, 1, 30, 30)
+    save_image(images, f"results/sample_image.png", nrow=nr_samples)
 
 
 if __name__ == "__main__":
@@ -32,19 +107,18 @@ if __name__ == "__main__":
     N_BALLS = 1
     N_SAMPLES = 1
     RADII = 1.2,
-    model_path = "models/bouncing_ball_model_epoch_2000_batch_size_32.pt"
-    model = torch.load(model_path, map_location=torch.device('cpu'))
-
+    LATENT_DIMS = 20
+    #model_path = "models/TS_bouncing_ball_model.pt"
+    model_path = "models/bouncing_ball_model_epoch_2500_batch_size_64_lambda_10.0.pt"
+    model = torch.load(model_path, map_location='cpu')
     nr_points = 1000
+    nr_image_samples = 10
+    latent_range = 5
 
     images, positions = load_bouncing_ball_data(n_steps=nr_points, resolution=RESOLUTION, n_balls=N_BALLS, n_samples=N_SAMPLES, radii=RADII, save_positions=True)
 
-    flat_coordinates_old = np.array([list(coordinates[0][0]) for coordinates in positions]).T
 
-    model.eval()
-    images = torch.from_numpy(images).float()
-    latent_points = model.reparametrise(*model.encode(images))
+    important_dims = plot_latent_variance(model, images, LATENT_DIMS)
 
-    flat_coordinates_new = [list(coordinates) for coordinates in latent_points.data.numpy()]
-    flat_coordinates_new = np.array(flat_coordinates_new).T
-    plot_mapping(flat_coordinates_old, flat_coordinates_new)
+    map_images_to_points(model, images, positions, important_dims)
+    random_samples(model, nr_image_samples, LATENT_DIMS, latent_range, important_dims)

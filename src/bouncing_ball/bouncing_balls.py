@@ -79,6 +79,9 @@ def generate_bouncing_ball_positions(
             positions += eps*v
             v[:] = np.where(positions - radii[:, None] < 0, -v, v)
             v[:] = np.where(positions + radii[:, None] > SIZE, -v, v)
+
+            random_pertubation = np.random.normal(0, 0.05, v.shape)
+            v += random_pertubation
             for i in range(n_balls):  # For each ball
                 for j in range(i):  # For all balls before ball i
                     separations = positions[..., i, :] - positions[..., j, :]
@@ -116,7 +119,8 @@ def load_bouncing_ball_data(resolution, n_steps, n_samples, save_positions=False
     positions = np.empty((n_steps, n_samples, N_BALLS, 2))
     for t, imgs in enumerate(generate_bouncing_ball_data(resolution=resolution, n_steps=n_steps, n_samples=n_samples, save_positions=save_positions, **kwargs)):
         data[t] = imgs[0]
-        positions[t] = imgs[1]
+        if save_positions:
+            positions[t] = imgs[1]
     if save_positions:
         return data, positions
     else:
