@@ -109,16 +109,7 @@ class MyConvObj(TFGraphClass[MyNodes]):
     @classmethod
     def from_graph(cls, im_shape):
         x = tf.placeholder(shape=im_shape, dtype=tf.float32, name='x')
-        y = tf.layers.conv2d(
-            x,
-            filters=4,
-            kernel_size=3,
-            strides=1,
-            padding='SAME',
-            use_bias=True,
-            activation=None,
-            name='y'
-          )
+        y = tf.layers.conv2d(x, filters=4, kernel_size=3, strides=1, padding='SAME', use_bias=True, activation=None, name='y')
         nodes = MyNodes(x=x, y=y)
         return MyConvObj(nodes = nodes)
 
@@ -139,36 +130,52 @@ def test_serializable_obj():
     assert np.allclose(y1, y2)
 
     # Option 2: More convenient interface with dump
-    # ser_dir = obj.dump()
-    # obj3 = TFGraphClass.load(ser_dir, scope='aaa')
-    # y3 = obj3(im)
-    # assert np.allclose(y1, y3)
+    ser_dir = obj.dump()
+    obj3 = TFGraphClass.load(ser_dir, scope='aaa')
+    y3 = obj3(im)
+    assert np.allclose(y1, y3)
 # all_ops_in_graph
+
 
 def test_duplicate_graph():
 
     im = np.random.randn(5, 10, 10, 3)
     obj = MyConvObj.from_graph(im_shape= im.shape)
-    ser_dir = obj.dump()
 
-    obj2 = TFGraphClass.load(ser_dir)  # type: MyConvObj
+    x, y = obj.nodes.x, obj.nodes.y
 
-    x1, y1 = replicate_subgraph(inputs=obj2.nodes.x, outputs = obj2.nodes.y)
+
+    sess = tf.Session()
+
+    sess.runsess.run(tf.global_variables_initializer())
+
+    sess.run(y, feed_dict={x: im})
+
+    # ser_dir = obj.dump()
+
+    # obj2 = TFGraphClass.load(ser_dir)  # type: MyConvObj
+
+    x1, y1 = replicate_subgraph(inputs=obj.nodes.x, outputs = obj.nodes.y)
     # raise NotImplementedError('Gave up')
 
 
-def test_keep_it_simple():
-    im = np.random.randn(5, 10, 10, 3)
-
-    x1 = tf.placeholder(shape=im.shape, dtype=tf.float32, name='x1')
-    y1 = tf.layers.conv2d(x1, filters=4)
-
-
-    x2 = tf.placeholder(shape=im.shape, dtype=tf.float32, name='x1')
-    y2 = tf.layers.conv2d(x1, filters=4)
+    sess.run(y1, feed_dict={x1: im})
 
 
 
+
+
+# def test_keep_it_simple():
+#     im = np.random.randn(5, 10, 10, 3)
+#
+#     x1 = tf.placeholder(shape=im.shape, dtype=tf.float32, name='x1')
+#     y1 = tf.layers.conv2d(x1, filters=4)
+#
+#
+#     x2 = tf.placeholder(shape=im.shape, dtype=tf.float32, name='x2')
+#     y2 = tf.layers.conv2d(x1, filters=4)
+
+#     y2 = tf.layers.conv2d(x1, filters=4)
 
 
 
@@ -176,5 +183,4 @@ if __name__ == '__main__':
     # test_graph_save()
     # test_graph_save_with_namedtuple()
     # test_serializable_obj()
-    # test_duplicate_graph()
-    test_keep_it_simple()
+    test_duplicate_graph()
