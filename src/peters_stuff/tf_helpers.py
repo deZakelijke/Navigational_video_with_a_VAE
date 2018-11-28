@@ -172,6 +172,7 @@ def replicate_subgraph(inputs, outputs, new_inputs=None):
         inputs = [inputs]
         if new_inputs is not None:
             new_inputs = [new_inputs]
+
     if single_output:
         outputs = [outputs]
 

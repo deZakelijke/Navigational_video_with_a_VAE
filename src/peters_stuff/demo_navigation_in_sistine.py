@@ -224,10 +224,9 @@ if __name__ == "__main__":
 
         @staticmethod
         def vae_planner():
-            # vae = TFGraphClass.load(get_artemis_data_path('tests/models/M0B6AQVS4DF91940/model'))
-            # demo_use_system_controller(model = VAEStraightLineNavModel(vae))
             vae = TFGraphClass.load(get_artemis_data_path('tests/models/M0B6AQVS4DF91940/model'))
+            demo_use_system_controller(model = VAEStraightLineNavModel(vae))
+            # vae = TFGraphClass.load(get_artemis_data_path('tests/models/M0B6AQVS4DF91940/model'))
+            # demo_use_system_controller(model = VAEStraightLinePlanner.from_vae(vae))
 
-            demo_use_system_controller(model = VAEStraightLinePlanner.from_vae(vae))
-
-    ImageNavigationDemos.vae_planner()
+    ImageNavigationDemos.pretrained_vid()
