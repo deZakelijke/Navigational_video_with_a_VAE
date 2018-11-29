@@ -38,6 +38,7 @@ def demo_train_just_vae_on_images(
         model = TFVAEModel(get_convlstm_vae_graph(n_pose_channels=latent_dims, output_type = output_type, kl_scale=kl_scale))
     elif model_constructor == 'convlstm_2':
         model = TFVAEModel(get_convlstm_vae_graph(n_pose_channels=latent_dims, output_type = output_type, kl_scale=kl_scale, n_gen_maps=128))
+
     else:
         assert callable(model_constructor)
         model = model_constructor()

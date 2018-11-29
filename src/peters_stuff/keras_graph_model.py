@@ -1,6 +1,7 @@
 from typing import List
 from typing import Tuple
 
+import itertools
 import tensorflow as tf
 from tensorflow.python.keras.utils import get_custom_objects
 
@@ -30,7 +31,7 @@ def _order_node_executions(graph_keys, inputs, outputs):
 
 def _parse_graph(graph_keys, inputs, outputs, allow_subgraph = False):
 
-    single_input = not isinstance(inputs, (list, tuple))
+    single_input = not isinstance(inputs, (list, tuple)) and not inputs is None
     single_output = not isinstance(outputs, (list, tuple)) and not outputs is None
 
     if single_input:
@@ -117,7 +118,20 @@ def _create_tensor_graph(graph, node_levels, input_dict):
     tensor_dict = input_dict.copy()
     for level in node_levels:
         for inputs, outputs in level:
-            output_values = graph[(inputs, outputs)]([tensor_dict[name] for name in inputs] if _is_multi(inputs) else tensor_dict[inputs])
+            layer = graph[(inputs, outputs)]
+            #
+            # if _is_multi(layer):
+            #     output_values = [tensor_dict[name] for name in inputs] if _is_multi(inputs) else tensor_dict[inputs]
+            #     for lay in layer:
+            #         output_values = lay(output_values)
+            # else:
+            input_tensors = [tensor_dict[name] for name in inputs] if _is_multi(inputs) else tensor_dict[inputs]
+            try:
+                output_values = layer(input_tensors)
+            except:
+                print('Error while Processing Node: {}: {} with inputs {}'.format((inputs, outputs), layer, input_tensors))
+                raise
+
             if _is_multi(output_values):
                 assert _is_multi(outputs) and len(outputs)==len(output_values), 'PUT ERROR HERE'
                 for name, out in zip(outputs, output_values):
@@ -131,47 +145,106 @@ def input_like(np_input):
     return tf.keras.Input(shape=np_input.shape[1:], dtype=np_input.dtype)
 
 
+def _to_layer(layer_spec):
+
+    if isinstance(layer_spec, tf.keras.layers.Layer):
+        return layer_spec
+    elif callable(layer_spec):
+        return tf.keras.layers.Lambda(lambda args: layer_spec(*args) if _is_multi(args) else layer_spec(args))
+    else:
+        raise NotImplementedError(layer_spec)
+
+
+def _normalize_graph(graph):
+    all_nodes = set(name for inp, out in graph.keys() for name in _to_multi(inp)+_to_multi(out))
+    anon_node_name_gen = ('anon_{}'.format(i) for i in itertools.count() if i not in all_nodes)
+    newgraph = {}
+    for (inp, out), layer in graph.items():
+        if not _is_multi(layer):
+            newgraph[inp, out] = _to_layer(layer)
+        else:
+            names = [inp] + [next(anon_node_name_gen) for _ in range(len(layer)-1)] + [out]
+            for inp_, out_, lay in zip(names[:-1], names[1:], layer):
+                newgraph[inp_, out_] = _to_layer(lay)
+    return newgraph
+
+
 class GraphModel(tf.keras.Model):
 
-    def __init__(self, graph, inputs, output_names=None):
+    def __init__(self, graph, input_names = None, output_names=None, input_tensors=None, inputs_like=None):
         """
         :param Dict(Tuple[Tuple[str], Tuple[str]], Layer] graph:
-        :param List[(str, Input)] inputs:
-        :param List[str] output_names:
+        :param Union[str, Sequence[str]] input_names:
+        :param Union[str, Sequence[str]] output_names:
         """
-        input_name_layer_pairs, single_input = _parse_inputs(inputs)  # type: List[Tuple[str, InputLayer]]
-        node_levels, inputs, outputs = _parse_graph(graph.keys(), inputs = [name for name, _ in input_name_layer_pairs], outputs = output_names)
-        tensor_dict = _create_tensor_graph(graph=graph, node_levels=node_levels, input_dict = dict(input_name_layer_pairs))
+
+        self._setattr_tracking = False
+        self._is_initialized = False
+
+        # self._layer_graph = {(inp, out: tf.keras.models.Sequential(v) if _is_multi(v) else v for k, v in graph.items()}
+        self._layer_graph = _normalize_graph(graph)
+        self._node_levels, self._input_names, self._output_names = _parse_graph(self._layer_graph.keys(), inputs = input_names, outputs = output_names)
+        if input_tensors is not None:
+            self._initialize(input_tensors)
+        elif inputs_like is not None:
+            self._initialize_from_example_inputs(inputs_like)
+        self._setattr_tracking = True
+
+    def _initialize_from_example_inputs(self, input_arrays):
+        input_tensors = [input_like(xi) for xi in input_arrays] if _is_multi(input_arrays) else input_like(input_arrays)
+        self._initialize(input_tensors)
+
+    def _initialize(self, input_tensors):
+
+        if _is_multi(self._input_names):
+            input_tensors = _to_multi(input_tensors)
+            assert len(input_tensors)==len(self._input_names), "Graph requires {} input signals {}, but got {} input tensors {}".format(len(self._input_names), self._input_names, len(input_tensors), input_tensors)
+            input_dict = {name: tens for name, tens in zip(self._input_names, input_tensors)}
+        else:
+            if _is_multi(input_tensors):
+                assert len(input_tensors)==1, 'Graph only accepts 1 input tensor: {}.  You provided {}: {}'.format(self._input_names, len(input_tensors), input_tensors)
+                input_tensors, = input_tensors
+            input_dict = {self._input_names: input_tensors}
+
+        tensor_dict = _create_tensor_graph(graph=self._layer_graph, node_levels=self._node_levels, input_dict = input_dict)
 
         super(GraphModel, self).__init__(
-            inputs = input_name_layer_pairs[0][1] if single_input else [layer for name, layer in input_name_layer_pairs],
-            outputs = tensor_dict[outputs] if not _is_multi(outputs) else [tensor_dict[name] for name in outputs])
-        self._is_initialized = False
-        self._graph = graph
-        self._input_names = list(name for name, _ in input_name_layer_pairs)
-        self._output_names = output_names
-        self._tensor_dict = tensor_dict
-    #
-    # def call(self, inputs, training=None, mask=None):
-    #     if not self._is_initialized:
-    #         inputs = [in]
+            inputs = input_tensors,
+            outputs = tensor_dict[self._output_names] if not _is_multi(self._output_names) else [tensor_dict[name] for name in self._output_names]
+        )
+        self._is_initialized=True
 
+    def predict(self, x, **kwargs):
+        if not self._is_initialized:
+            self._initialize_from_example_inputs(x)
+        return super(GraphModel, self).predict(x=x, **kwargs)
+
+    def call(self, x, training=None, mask=None):
+        if not self._is_initialized:
+            self._initialize(x)
+        return super(GraphModel, self).call(x, training=training, mask=mask)
 
     def get_subgraph(self, input_names, output_names):
-        keys = _extract_subgraph(self._graph.keys(), input_names, output_names)
-        subgraph = {k: self._graph[k] for k in keys}
+        keys = _extract_subgraph(self._layer_graph.keys(), input_names, output_names)
+        subgraph = {k: self._layer_graph[k] for k in keys}
         return GraphModel(
             graph=subgraph,
-            inputs = [(input_names, self._tensor_dict[input_names]) if not _is_multi(input_names) else [(inp, self._tensor_dict[inp]) for inp in input_names]],
+            input_names = input_names,
             output_names = output_names,
+            # input_tensors = self.input if self._is_initialized else None
             )
 
     def get_config(self):
+        if not self._is_initialized:
+            raise NotImplementedError('Cannot yet save uninitialized models.  Either provide input tensors or call the model before saving.')
         config = super(GraphModel, self).get_config()
         config['graphmodel'] = dict()
-        config['graphmodel']['graph'] = [(inp, out, layer.name) for (inp, out), layer in self._graph.items()]
+        config['graphmodel']['graph'] = [(inp, out, layer.name) for (inp, out), layer in self._layer_graph.items()]
         config['graphmodel']['input_names'] = list(self._input_names)
+        config['graphmodel']['is_initialized'] = self._is_initialized
         config['graphmodel']['output_names'] = list(self._output_names) if self._output_names is not None else None
+        config['graphmodel']['node_levels'] = self._node_levels
+        config['graphmodel']['version'] = 0
         return config
 
     @classmethod
@@ -179,9 +252,11 @@ class GraphModel(tf.keras.Model):
         input_tensors, output_tensors, name, created_layers = _model_from_config(config, custom_objects=custom_objects)
         obj = cls.__new__(cls)
         super(GraphModel, obj).__init__(inputs=input_tensors, outputs=output_tensors, name=name)
-        obj._graph = {(inp, out): created_layers[name] for inp, out, name in config['graphmodel']['graph']}
+        obj._layer_graph = {(tuple(inp) if _is_multi(inp) else inp, tuple(out) if _is_multi(out) else out): created_layers[name] for inp, out, name in config['graphmodel']['graph']}
         obj._input_names = config['graphmodel']['input_names']
         obj._output_names = config['graphmodel']['output_names']
+        obj._is_initialized = config['graphmodel']['is_initialized']
+        obj._node_levels = config['graphmodel']['node_levels']
         return obj
 
 
