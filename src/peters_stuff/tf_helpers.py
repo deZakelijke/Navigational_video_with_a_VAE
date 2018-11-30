@@ -13,7 +13,7 @@ from artemis.fileman.local_dir import get_artemis_data_path
 
 def _generate_random_model_path(code_gen_len=16):
     code = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(code_gen_len))
-    model_path = get_artemis_data_path('tests/models/{}/model'.format(code), make_local_dir=True)
+    model_path = get_artemis_data_path('models/{}/model'.format(code), make_local_dir=True)
     return model_path
 
 
