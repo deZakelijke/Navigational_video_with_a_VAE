@@ -89,8 +89,8 @@ if __name__ == "__main__":
                                 help='Path to file to save model')
     parser.add_argument('--learning-rate', type=float, default=1e-3, metavar='L',
                                 help='The learning rate of the model')
-    parser.add_argument('--lambda_reg', type=float, default=1.0, metavar='L',
-                                help='The regularizing term for the distance loss')
+    parser.add_argument('--supervision', type=float, default=1.0, metavar='L',
+                                help='The supervision factor for the distance loss')
     
     args = parser.parse_args()
     args.cuda = args.cuda and torch.cuda.is_available()
@@ -99,10 +99,15 @@ if __name__ == "__main__":
         torch.cuda.manual_seed(args.seed)
 
     use_positions = True
-    train_dataset = DataLoader(BouncingBallLoader(n_steps=args.nr_images, save_positions=use_positions), 
+    normalize = True
+    train_dataset = DataLoader(BouncingBallLoader(n_steps=args.nr_images, 
+                                                  save_positions=use_positions,
+                                                  normalize=normalize), 
                                batch_size=args.batch_size, 
                                shuffle=True)
-    test_dataset  = DataLoader(BouncingBallLoader(n_steps=args.nr_images // 10, save_positions=use_positions),
+    test_dataset  = DataLoader(BouncingBallLoader(n_steps=args.nr_images // 10, 
+                                                  save_positions=use_positions,
+                                                  normalize=normalize),
                                batch_size=args.batch_size,
                                shuffle=True)
 
@@ -110,8 +115,8 @@ if __name__ == "__main__":
     desired_latent_dims = 2
     image_size = (30, 30)
     size = (1, *image_size)
-    lambda_reg = args.lambda_reg
-    model = VAE(latent_dims, image_size, lambda_reg, desired_latent_dims).float()
+    supervision = args.supervision
+    model = VAE(latent_dims, image_size, supervision, desired_latent_dims).float()
     if args.cuda:
         model.cuda()
     optimiser = optim.Adam(model.parameters(), lr=args.learning_rate)
@@ -121,7 +126,7 @@ if __name__ == "__main__":
             train(epoch, train_dataset, optimiser, use_positions)
             test(epoch, test_dataset, use_positions)
             if epoch == 1000:
-                model.lambda_reg = 0
+                model.supervision = 0
 
     except KeyboardInterrupt:
         print("Manual quitting")
@@ -136,7 +141,7 @@ if __name__ == "__main__":
             epoch))
 
         print("Saving model")
-        save_file = f"{args.save_path}bouncing_ball_model_epoch_{epoch}_batch_size_{args.batch_size}_lambda_{args.lambda_reg}.pt"
+        save_file = f"{args.save_path}bouncing_ball_model_epoch_{epoch}_batch_size_{args.batch_size}_lambda_{args.supervision}.pt"
         torch.save(model, save_file)
 
 
