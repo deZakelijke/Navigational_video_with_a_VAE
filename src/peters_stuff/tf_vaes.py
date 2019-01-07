@@ -84,3 +84,4 @@ def get_convlstm_vae_graph(cell_downsample=4, n_rec_maps=32, n_gen_maps=64, sequ
     elbo = tf.reduce_mean(log_likelihood - kl_scale * kl_term)
     train_op = AdamOptimizer().minimize(-elbo)
     return VAEGraph(x_sample=x_sample, z_mu=z_mu, z_var=z_var, z_sample=z_sample, x_mu = x_dist.mean(), x_var = x_dist.variance(), elbo=elbo, train_op = train_op, batch_size=batch_size)
+

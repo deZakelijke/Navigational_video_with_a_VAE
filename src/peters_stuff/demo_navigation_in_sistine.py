@@ -14,7 +14,7 @@ from src.peters_stuff.crop_predictors import ICropPredictor
 from src.peters_stuff.image_crop_generator import iter_bbox_batches
 from src.peters_stuff.position_predictors import IPositionPredictor, bbox_to_position
 from src.peters_stuff.sample_data import SampleImages
-from src.peters_stuff.tf_helpers import TFGraphClass, replicate_subgraph
+from src.peters_stuff.tf_helpers import TFGraphClass, replicate_subgraph, load_model_and_graph
 from src.peters_stuff.tf_vaes import TFVAEModel, VAEGraph
 import tensorflow as tf
 import tensorflow.contrib.graph_editor as ge
@@ -73,6 +73,7 @@ class VAEStraightLineNavModel(INavigationModel):
 
 PathPlanningNodes = namedtuple('PathPlanningNodes', ['xs', 'xd', 'z_path', 'x_path', 'batch_size'])
 
+
 class VAEStraightLinePlanner(TFGraphClass[PathPlanningNodes], INavigationModel):
     # TODO: Make this work... It's broken now because of the replicate subgraph thing.
 
@@ -87,9 +88,9 @@ class VAEStraightLinePlanner(TFGraphClass[PathPlanningNodes], INavigationModel):
 
         nodes = vae.nodes  # type: VAEGraph
 
-        batch_size = tf.placeholder(tf.int32, [], name='the_batch_size')
-        (xs, _), zs = replicate_subgraph(inputs=[nodes.x_sample, nodes.batch_size], outputs=nodes.z_mu, new_inputs={nodes.batch_size: batch_size})
-        (xd, _), zd = replicate_subgraph(inputs=[nodes.x_sample, nodes.batch_size], outputs=nodes.z_mu, new_inputs={nodes.batch_size: batch_size})
+        # batch_size = tf.placeholder(tf.int32, [], name='the_batch_size')
+        (xs, batch_size), zs = replicate_subgraph(inputs=[nodes.x_sample, nodes.batch_size], outputs=nodes.z_mu, new_inputs={nodes.batch_size: None})
+        (xd, batch_size), zd = replicate_subgraph(inputs=[nodes.x_sample, nodes.batch_size], outputs=nodes.z_mu, new_inputs={nodes.batch_size: None})
         n_waypoints = tf.maximum(2, tf.to_int32(tf.ceil(tf.reduce_sum(tf.sqrt(((zs-zd)**2)) / step_spacing))))
         frac = tf.linspace(0., 1., n_waypoints)[:, None]
         zp = zs*(1-frac) + zd*frac
@@ -98,9 +99,6 @@ class VAEStraightLinePlanner(TFGraphClass[PathPlanningNodes], INavigationModel):
 
         nodes = PathPlanningNodes(xs=xs, xd=xd, z_path=zp, x_path=video, batch_size=batch_size)
         return VAEStraightLinePlanner(nodes)
-
-
-
 
 
 def demo_show_navigation_video(
@@ -226,10 +224,9 @@ if __name__ == "__main__":
 
         @staticmethod
         def vae_planner():
-            # vae = TFGraphClass.load(get_artemis_data_path('tests/models/M0B6AQVS4DF91940/model'))
-            # demo_use_system_controller(model = VAEStraightLineNavModel(vae))
             vae = TFGraphClass.load(get_artemis_data_path('tests/models/M0B6AQVS4DF91940/model'))
+            demo_use_system_controller(model = VAEStraightLineNavModel(vae))
+            # vae = TFGraphClass.load(get_artemis_data_path('tests/models/M0B6AQVS4DF91940/model'))
+            # demo_use_system_controller(model = VAEStraightLinePlanner.from_vae(vae))
 
-            demo_use_system_controller(model = VAEStraightLinePlanner.from_vae(vae))
-
-    ImageNavigationDemos.vae_planner()
+    ImageNavigationDemos.pretrained_vid()

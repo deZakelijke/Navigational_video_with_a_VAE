@@ -6,9 +6,8 @@
         <serverdata>
           <mappings>
             <mapping deploy="/home/petered/remote/Navigational_video_with_a_VAE" local="$PROJECT_DIR$" />
-            <mapping deploy="/home/petered/remote/vae-celebA" local="$PROJECT_DIR$/../vae-celebA" />
-            <mapping deploy="/home/petered/remote/Navigational_video_with_a_VAE/src/src/artemis/" local="$PROJECT_DIR$/../petes_nn_factory/venv3/src/artemis" />
-            <mapping deploy="" local="" />
+            <mapping deploy="/home/petered/remote/petes_nn_factory" local="$PROJECT_DIR$/../petes_nn_factory" />
+            <mapping deploy="/home/petered/remote/Navigational_video_with_a_VAE/src/src/artemis/" local="$PROJECT_DIR$/../artemis" />
           </mappings>
         </serverdata>
       </paths>
