@@ -130,7 +130,9 @@ Xgqn3=demo_train_convlstm_pos2im.add_root_variant(save_models=True).add_config_v
 
 if __name__ == '__main__':
 
-    Xgqn3.call()
+    # Xgqn3.run()
+
+    Xgqn3.browse()
 
     # Xgqn.call()
     # Xgqn2.run()

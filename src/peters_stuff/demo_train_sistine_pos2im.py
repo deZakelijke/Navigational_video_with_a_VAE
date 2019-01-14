@@ -105,7 +105,10 @@ if __name__ == '__main__':
     # X64.run()
     # X128.run()
     # demo_train_just_vae_on_images_gqn()
-    demo_train_just_vae_on_images_gqn.browse(raise_display_errors=True)
+    # demo_train_just_vae_on_images_gqn.browse(raise_display_errors=True)
+
+    # Xgqn3.get_variant('params').run()
+    Xgqn3.get_variant('params').browse()
 
     # demo_train_just_vae_on_images_gqn.get_variant('deconv1').run()
     # demo_train_just_vae_on_images_gqn.get_variant('gqn1').call()
