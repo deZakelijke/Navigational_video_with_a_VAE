@@ -8,6 +8,8 @@
             <mapping deploy="/home/petered/remote/Navigational_video_with_a_VAE" local="$PROJECT_DIR$" />
             <mapping deploy="/home/petered/remote/petes_nn_factory" local="$PROJECT_DIR$/../petes_nn_factory" />
             <mapping deploy="/home/petered/remote/Navigational_video_with_a_VAE/src/src/artemis/" local="$PROJECT_DIR$/../artemis" />
+            <mapping deploy="/home/petered/remote/uoro_demo" local="$PROJECT_DIR$/../uoro-demo" />
+            <mapping deploy="/home/petered/remote/deepmirror" local="$PROJECT_DIR$/../deepmirror" />
           </mappings>
         </serverdata>
       </paths>

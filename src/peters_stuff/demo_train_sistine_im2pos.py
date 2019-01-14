@@ -13,8 +13,8 @@ from artemis.ml.tools.iteration import batchify_generator
 from artemis.plotting.db_plotting import dbplot, hold_dbplots, DBPlotTypes
 from src.peters_stuff.image_crop_generator import iter_bboxes_from_positions, iter_pos_random, batch_crop
 from src.peters_stuff.position_predictors import IPositionPredictor, feat_to_imbatch, ConvnetPositionPredictor, \
-    ConvnetGridPredictor, ConvnetGridPredictor2, bbox_to_position, position_to_bbox, GQNPositionPredictor, \
-    GQNPositionPredictor2, GQNPositionPredictor3
+    ConvnetGridPredictor, ConvnetGridPredictor2, bbox_to_position, position_to_bbox
+from src.peters_stuff.position_predictors_tf import GQNPositionPredictor, GQNPositionPredictor2, GQNPositionPredictor3
 
 from src.peters_stuff.sample_data import SampleImages
 

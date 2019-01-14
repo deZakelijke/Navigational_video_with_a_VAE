@@ -17,8 +17,9 @@ from artemis.general.duck import Duck
 from artemis.general.image_ops import resize_image
 from artemis.ml.tools.iteration import batchify_generator
 from artemis.plotting.db_plotting import dbplot, hold_dbplots
-from src.peters_stuff.crop_predictors import ICropPredictor, GQNCropPredictor, GQNCropPredictor2, DeconvCropPredictor, \
-    GQNCropPredictor3
+from src.peters_stuff.crop_predictors import ICropPredictor
+from src.peters_stuff.crop_predictors_torch import DeconvCropPredictor
+from src.peters_stuff.crop_predictors_tf import GQNCropPredictor, GQNCropPredictor2, GQNCropPredictor3
 from src.peters_stuff.image_crop_generator import iter_bboxes_from_positions, iter_pos_random, batch_crop, \
     iter_bbox_batches
 from src.peters_stuff.position_predictors import bbox_to_position

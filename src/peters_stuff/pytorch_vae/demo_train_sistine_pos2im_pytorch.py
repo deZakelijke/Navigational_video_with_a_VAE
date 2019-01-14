@@ -73,8 +73,8 @@ def demo_train_convlstm_pos2im(
         torch.set_default_tensor_type(torch.cuda.FloatTensor)
     print(f'Cuda: {cuda}')
 
-    # optimizer = Adagrad(lr=1e-3, params = model.parameters())
-    optimizer = Adam(params = model.parameters())
+    optimizer = Adagrad(lr=1e-3, params = model.parameters())
+    # optimizer = Adam(params = model.parameters())
 
     dbplot(img, 'full_img')
     # model = model_constructor(batch_size, crop_size)
