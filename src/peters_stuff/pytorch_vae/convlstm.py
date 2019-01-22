@@ -13,7 +13,7 @@ def glorot_reinitialize_kernel_(param):
     n_out, n_in, n_y, n_x = param.size()
     fan_in = n_in*n_y*n_x
     fan_out = n_out*n_y*n_x
-    scale = torch.sqrt(torch.tensor(6./(fan_in + fan_out)))
+    scale = torch.sqrt(torch.tensor(6./(fan_in +    fan_out)))
     param.data = scale * 2 * (torch.rand(param.size())-.5)
 
 
@@ -38,7 +38,7 @@ class ConvLSTMCell(nn.Module):
 
         self._forget_bias = forget_bias
 
-    def inital_state(self, n_samples):
+    def initial_state(self, n_samples):
         hidden_state = torch.zeros((n_samples, self._out_channels, self.size_y, self.size_x)).float().to(get_default_device())
         cell_state = torch.zeros((n_samples, self._out_channels, self.size_y, self.size_x)).float().to(get_default_device())
         return hidden_state, cell_state
@@ -70,9 +70,8 @@ class ConvLSTMPositiontoImageDecoder(nn.Module, ICropPredictor):
 
         reinit_conv2d_parameters(self.output_layer.mean_layer)
 
-
     def forward(self, poses):
-        (h_state, c_state) = state = self.lstm_cell.inital_state(n_samples = len(poses))
+        (h_state, c_state) = state = self.lstm_cell.initial_state(n_samples = len(poses))
         canvas = torch.zeros((len(poses), self.n_canvas_channels, self.n_y_canvas, self.n_x_canvas)).float().to(get_default_device())
         broadcast_poses = poses[:, :, None, None].repeat(1, 1, h_state.size()[2], h_state.size()[3])  # (n_samples, 2, size_y, size_x)
         for t in range(self.n_steps):
@@ -96,7 +95,7 @@ class ConvLSTMImageToPositionEncoder(nn.Module):
         self.logsig_output_layer = nn.Conv2d(n_hidden_channels, n_pose_channels, kernel_size=output_kernel_size)
 
     def forward(self, image):
-        h_state, c_state = self.lstm_cell.inital_state(n_samples = len(image))
+        h_state, c_state = self.lstm_cell.initial_state(n_samples = len(image))
         img_remapped = self.im_reader_conv(image)
         for t in range(self.n_steps):
             h_state = h_state + img_remapped  # TODO: Why??? They seem to do this too though...

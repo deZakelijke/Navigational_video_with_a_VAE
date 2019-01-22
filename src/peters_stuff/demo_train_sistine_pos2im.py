@@ -60,7 +60,8 @@ def demo_train_just_vae_on_images_gqn(
 
         duck[next, :] = dict(iter=i, pixel_error=pixel_error, elapsed=time.time()-t_start, training_loss=training_loss)
 
-        if do_every('30s'):
+        # if do_every('30s'):
+        if do_every(100):
             report = f'Iter: {i}, Pixel Error: {pixel_error:3g}, Mean Rate: {i/(time.time()-t_start):.3g}iter/s'
             print(report)
             with hold_dbplots():
@@ -108,7 +109,7 @@ if __name__ == '__main__':
     # demo_train_just_vae_on_images_gqn.browse(raise_display_errors=True)
 
     # Xgqn3.get_variant('params').run()
-    Xgqn3.get_variant('params').browse()
+    Xgqn3.get_variant('params').call()
 
     # demo_train_just_vae_on_images_gqn.get_variant('deconv1').run()
     # demo_train_just_vae_on_images_gqn.get_variant('gqn1').call()

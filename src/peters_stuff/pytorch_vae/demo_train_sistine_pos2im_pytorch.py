@@ -73,8 +73,8 @@ def demo_train_convlstm_pos2im(
         torch.set_default_tensor_type(torch.cuda.FloatTensor)
     print(f'Cuda: {cuda}')
 
-    optimizer = Adagrad(lr=1e-3, params = model.parameters())
-    # optimizer = Adam(params = model.parameters())
+    # optimizer = Adagrad(lr=1e-3, params = model.parameters())
+    optimizer = Adam(params = model.parameters())
 
     dbplot(img, 'full_img')
     # model = model_constructor(batch_size, crop_size)
@@ -97,23 +97,28 @@ def demo_train_convlstm_pos2im(
         predicted_dist = model(positions)
 
         # loss = -predicted_dist.log_prob(image_crops).flatten(1).sum(dim=1).mean()
-        loss = ((predicted_dist.mean - image_crops)**2).flatten(1).sum(dim=1).mean()
+        # loss = ((predicted_dist.mean - image_crops)**2).flatten(1).sum(dim=1).mean()
+        loss = ((predicted_dist.mean - image_crops)**2).flatten(1).mean()
 
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
-        pixel_error = torch.abs(image_crops - predicted_dist.mean).mean().item()
+        true_image = denormalize_image(image_crops[:16])
+        predicted_image = denormalize_image(predicted_dist.mean[:16])
+
+        pixel_error = np.abs(true_image - predicted_image).mean()/255.
 
         duck[next, :] = dict(iter=i, pixel_error=pixel_error, elapsed=time.time()-t_start, training_loss=loss.item())
 
-        if do_every('30s'):
+        # if do_every('30s'):
+        if do_every(100):
             report = f'Iter: {i}, Pixel Error: {pixel_error:3g}, Mean Rate: {i/(time.time()-t_start):.3g}iter/s'
             print(report)
 
             with hold_dbplots():
-                dbplot(denormalize_image(image_crops[:16]), 'crops')
-                dbplot(denormalize_image(predicted_dist.mean[:16]), 'predicted_crops', cornertext=report)
+                dbplot(true_image, 'crops')
+                dbplot(predicted_image, 'predicted_crops', cornertext=report)
 
         if is_checkpoint():
             save_figure_in_record()
@@ -132,7 +137,8 @@ if __name__ == '__main__':
 
     # Xgqn3.run()
 
-    Xgqn3.browse()
+    # Xgqn3.browse()
+    Xgqn3.call()
 
     # Xgqn.call()
     # Xgqn2.run()
