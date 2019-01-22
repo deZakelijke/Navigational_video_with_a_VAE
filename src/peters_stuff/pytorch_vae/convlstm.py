@@ -2,8 +2,8 @@ import torch
 from torch import nn
 from torch.nn import functional as ff
 
-from src.peters_stuff.crop_predictors import ICropPredictor
-from src.peters_stuff.pytorch_helpers import get_default_device
+from src.peters_stuff.pytorch_vae.interfaces import IImageToPositionEncoder, IPositionToImageDecoder
+from src.peters_stuff.pytorch_vae.pytorch_helpers import get_default_device
 from src.peters_stuff.pytorch_vae.pytorch_vaes import DistributionLayer
 
 
@@ -52,7 +52,7 @@ class ConvLSTMCell(nn.Module):
         return new_hidden_state, (new_hidden_state, new_cell_state)
 
 
-class ConvLSTMPositiontoImageDecoder(nn.Module, ICropPredictor):
+class ConvLSTMPositiontoImageDecoder(nn.Module, IPositionToImageDecoder):
 
     def __init__(self, input_shape, n_hidden_channels, n_canvas_channels, n_pose_channels=2, kernel_size=5, forget_bias=1.0, canvas_scale=4, n_steps = 12, output_kernel_size=5, output_type ='normal'):
         super(ConvLSTMPositiontoImageDecoder, self).__init__()
@@ -80,7 +80,7 @@ class ConvLSTMPositiontoImageDecoder(nn.Module, ICropPredictor):
         return self.output_layer(canvas)
 
 
-class ConvLSTMImageToPositionEncoder(nn.Module):
+class ConvLSTMImageToPositionEncoder(nn.Module, IImageToPositionEncoder):
 
     def __init__(self, input_shape, n_hidden_channels, n_pose_channels=2, kernel_size=5, forget_bias=1.0, canvas_scale=4, n_steps = 12, output_kernel_size=5, output_type = 'normal'):
         super(ConvLSTMImageToPositionEncoder, self).__init__()

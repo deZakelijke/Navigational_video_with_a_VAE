@@ -4,6 +4,7 @@ from typing import Callable, Tuple
 import numpy as np
 
 from src.VAE_with_Disc import VAE
+from src.peters_stuff.bbox_utils import bbox_to_position, position_to_bbox  # Just here for imports for back compativb
 
 
 class IPositionPredictor(object):
@@ -238,19 +239,3 @@ class ConvnetGridPredictor2(IPositionPredictor):
     @staticmethod
     def get_constructor(learning_rate=1e-3, filters=32, img_channels = 3, use_batchnorm = True, opt='sgd', gridsize=(10, 10), weight_decay=0.):
         return lambda batch_size, image_size: ConvnetGridPredictor2(image_size=image_size, learning_rate=learning_rate, filters=filters, img_channels=img_channels, use_batchnorm=use_batchnorm, opt=opt, gridsize=gridsize, weight_decay=weight_decay)
-
-
-def bbox_to_position(bboxes, image_size, crop_size):
-    return np.array(bboxes)[:, [1, 0]] / (image_size[0] - crop_size[0], image_size[1] - crop_size[1]) - 0.5
-
-
-def position_to_bbox(positions, image_size, crop_size, clip=False):
-
-    if clip:
-        positions = np.clip(positions, -.5, .5)
-
-    unnorm_positions = ((np.array(positions)+.5)[:, [1, 0]] * (image_size[0] - crop_size[0], image_size[1] - crop_size[1])).astype(np.int)
-    bboxes = np.concatenate([unnorm_positions, unnorm_positions+crop_size], axis=1)
-    return bboxes
-
-

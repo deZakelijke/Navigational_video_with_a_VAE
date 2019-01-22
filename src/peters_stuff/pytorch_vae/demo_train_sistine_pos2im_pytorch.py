@@ -1,59 +1,31 @@
 from __future__ import print_function
 
-import time
-from typing import Callable, Tuple, Iterator
-
 import numpy as np
+import time
 import torch
-from torch.optim import Adagrad, Adam
+from torch.optim import Adam
+from typing import Callable, Union
 
 from artemis.experiments.decorators import ExperimentFunction
 from artemis.experiments.experiment_record import save_figure_in_record
 from artemis.experiments.experiment_record_view import get_timeseries_record_comparison_function, \
     get_timeseries_oneliner_function
-from artemis.fileman.local_dir import get_artemis_data_path
 from artemis.general.checkpoint_counter import Checkpoints, do_every
 from artemis.general.duck import Duck
 from artemis.plotting.db_plotting import dbplot, hold_dbplots
-from src.peters_stuff.crop_predictors import ICropPredictor
-from src.peters_stuff.image_crop_generator import batch_crop, \
-    iter_bbox_batches
-from src.peters_stuff.position_predictors import bbox_to_position
-from src.peters_stuff.pytorch_helpers import get_default_device, set_default_device
+from src.peters_stuff.image_crop_generator import iter_bbox_batches
 from src.peters_stuff.pytorch_vae.convlstm import ConvLSTMPositiontoImageDecoder
+from src.peters_stuff.pytorch_vae.interfaces import IPositionToImageDecoder
+from src.peters_stuff.pytorch_vae.pytorch_helpers import setup_cuda_if_available
+from src.peters_stuff.pytorch_vae.pytorch_imutils import denormalize_image, generate_random_model_path, \
+    get_normed_crops_and_position_tensors
 from src.peters_stuff.sample_data import SampleImages
-import random
-import string
-
-
-def chanfirst(im):
-    return np.rollaxis(im, 3, 1)
-
-
-def chanlast(im):
-    return np.rollaxis(im, 1, 4)
-
-
-def normalize_image(im):
-    return torch.from_numpy((chanfirst(im)/127.)-1.).float()
-
-
-def denormalize_image(im):
-    return ((chanlast(im.detach().cpu().numpy())+1.)*127.)
-
-
-
-def generate_random_model_path(code_gen_len=16, suffix='.pth'):
-    code = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(code_gen_len))
-    model_path = get_artemis_data_path('models/{}{}'.format(code, suffix), make_local_dir=True)
-    return model_path
-
 
 
 @ExperimentFunction(is_root=True, compare=get_timeseries_record_comparison_function(yfield='pixel_error'), one_liner_function=get_timeseries_oneliner_function(fields = ['iter', 'pixel_error']))
 def demo_train_convlstm_pos2im(
-        model = ICropPredictor,
-        position_generator_constructor: Callable[[], Iterator[Tuple[int, int]]] = 'random',
+        model: IPositionToImageDecoder,
+        position_generator_constructor: Union[str, Callable] = 'random',
         batch_size=64,
         checkpoints={0:100, 1000: 1000},
         crop_size = (64, 64),
@@ -61,23 +33,12 @@ def demo_train_convlstm_pos2im(
         save_models = False,
         ):
 
-
     img = SampleImages.sistine_512()
-
-    cuda = torch.cuda.is_available()
-    if cuda:
-        model.to('cuda')
-        torch.set_default_tensor_type(torch.FloatTensor)
-        set_default_device('cuda')
-    else:
-        torch.set_default_tensor_type(torch.cuda.FloatTensor)
-    print(f'Cuda: {cuda}')
-
+    cuda = setup_cuda_if_available(model)
     # optimizer = Adagrad(lr=1e-3, params = model.parameters())
     optimizer = Adam(params = model.parameters())
 
     dbplot(img, 'full_img')
-    # model = model_constructor(batch_size, crop_size)
 
     duck = Duck()
     t_start = time.time()
@@ -85,39 +46,28 @@ def demo_train_convlstm_pos2im(
 
     save_path = generate_random_model_path()
 
-    for i, bboxes in enumerate(iter_bbox_batches(image_shape=img.shape[:2], crop_size=crop_size, batch_size=batch_size, position_generator_constructor=position_generator_constructor)):
+    for i, bboxes in enumerate(iter_bbox_batches(image_shape=img.shape[:2], crop_size=crop_size, batch_size=batch_size, position_generator_constructor=position_generator_constructor, n_iter=n_iter)):
 
-        if n_iter is not None and i>=n_iter:
-            break
-
-        image_crops = normalize_image(batch_crop(img=img, bboxes=bboxes)).to(get_default_device()).float()
-
-        positions = torch.from_numpy(bbox_to_position(bboxes=bboxes, image_size=img.shape[:2], crop_size=crop_size)).to(get_default_device()).float()
+        raw_image_crops, normed_image_crops, positions = get_normed_crops_and_position_tensors(img=img, bboxes=bboxes)
 
         predicted_dist = model(positions)
 
-        # loss = -predicted_dist.log_prob(image_crops).flatten(1).sum(dim=1).mean()
-        # loss = ((predicted_dist.mean - image_crops)**2).flatten(1).sum(dim=1).mean()
-        loss = ((predicted_dist.mean - image_crops)**2).flatten(1).mean()
-
+        loss = ((predicted_dist.mean - normed_image_crops)**2).flatten(1).mean()
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
-        true_image = denormalize_image(image_crops[:16])
         predicted_image = denormalize_image(predicted_dist.mean[:16])
-
-        pixel_error = np.abs(true_image - predicted_image).mean()/255.
+        pixel_error = np.abs(raw_image_crops[:16] - predicted_image).mean()/255.
 
         duck[next, :] = dict(iter=i, pixel_error=pixel_error, elapsed=time.time()-t_start, training_loss=loss.item())
 
-        # if do_every('30s'):
         if do_every(100):
             report = f'Iter: {i}, Pixel Error: {pixel_error:3g}, Mean Rate: {i/(time.time()-t_start):.3g}iter/s'
             print(report)
 
             with hold_dbplots():
-                dbplot(true_image, 'crops')
+                dbplot(raw_image_crops, 'crops')
                 dbplot(predicted_image, 'predicted_crops', cornertext=report)
 
         if is_checkpoint():
@@ -137,8 +87,8 @@ if __name__ == '__main__':
 
     # Xgqn3.run()
 
-    # Xgqn3.browse()
-    Xgqn3.call()
+    Xgqn3.browse()
+    # Xgqn3.call()
 
     # Xgqn.call()
     # Xgqn2.run()

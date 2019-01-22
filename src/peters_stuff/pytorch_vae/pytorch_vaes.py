@@ -1,17 +1,34 @@
 from abc import abstractmethod
+from collections import namedtuple
+from typing import NamedTuple, Callable
 
 import torch
 import torch.nn as nn
 from torch.distributions import Normal, Bernoulli, Distribution, kl_divergence
 
+from src.peters_stuff.pytorch_vae.interfaces import IImageToPositionEncoder, IPositionToImageDecoder
+from src.peters_stuff.pytorch_vae.pytorch_helpers import get_default_device
+
+
+class VAESignals(NamedTuple):
+
+    z_distribution: Distribution
+    x_distribution: Distribution
+    z_samples: torch.Tensor
+    elbo: torch.Tensor
+
 
 class VAEModel(nn.Module):
 
-    def __init__(self, encoder, decoder, latent_dim):
+    def __init__(self, encoder: IImageToPositionEncoder, decoder: IPositionToImageDecoder, latent_dim: int):
         super(VAEModel, self).__init__()
         self.encoder = encoder
         self.decoder = decoder
-        self.latent_dim = latent_dim
+        self._latent_dim = latent_dim
+
+    @property
+    def latent_dim(self):
+        return self._latent_dim
 
     def encode(self, x) -> Distribution:
         return self.encoder(x)
@@ -20,7 +37,7 @@ class VAEModel(nn.Module):
         return self.decoder(z)
 
     def prior(self) -> Distribution:
-        return Normal(loc=torch.zeros(self.latent_dim), scale=1)
+        return Normal(loc=torch.zeros(self._latent_dim).to(get_default_device()), scale=1)
 
     def recon(self, x):
         z_distribution = self.encoder(x)
@@ -28,12 +45,17 @@ class VAEModel(nn.Module):
         distro = self.decode(z).log_prob(x)
         return distro.rsample(sample_shape = x.size())
 
-    def elbo(self, x):
+    def compute_all_signals(self, x) -> VAESignals:
         z_distribution = self.encoder(x)
         kl_div = kl_divergence(z_distribution, self.prior())
-        z = z_distribution.rsample()
-        data_log_likelihood = self.decode(z).log_prob(x)
-        return data_log_likelihood.flatten(1).sum(dim=1) - kl_div.sum(dim=1)
+        z_samples = z_distribution.rsample()
+        x_distribution = self.decode(z_samples)
+        data_log_likelihood = x_distribution.log_prob(x)
+        elbo = data_log_likelihood.flatten(1).sum(dim=1) - kl_div.sum(dim=1)
+        return VAESignals(z_distribution = z_distribution, z_samples = z_samples, x_distribution = x_distribution, elbo = elbo)
+
+    def elbo(self, x):
+        return self.compute_all_signals(x).elbo
 
     def sample(self, n_samples):
         z = self.prior().rsample(sample_shape=(n_samples, ))
@@ -56,6 +78,7 @@ def make_mlp(in_size, hidden_sizes, out_size = None, nonlinearity = 'relu'):
     if out_size is not None:
         net.add_module('L{}-lin'.format(len(hidden_sizes)+1), nn.Linear(in_features=last_size, out_features=out_size))
     return net
+
 
 
 class DistributionLayer(nn.Module):
