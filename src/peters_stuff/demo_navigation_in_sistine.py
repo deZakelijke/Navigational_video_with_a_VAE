@@ -14,7 +14,7 @@ from src.peters_stuff.crop_predictors import ICropPredictor
 from src.peters_stuff.image_crop_generator import iter_bbox_batches
 from src.peters_stuff.position_predictors import IPositionPredictor, bbox_to_position
 from src.peters_stuff.sample_data import SampleImages
-from src.peters_stuff.tf_helpers import TFGraphClass, replicate_subgraph
+from src.peters_stuff.tf_helpers import TFGraphClass, replicate_subgraph, load_model_and_graph
 from src.peters_stuff.tf_vaes import TFVAEModel, VAEGraph
 import tensorflow as tf
 import tensorflow.contrib.graph_editor as ge
@@ -100,7 +100,31 @@ class VAEStraightLinePlanner(TFGraphClass[PathPlanningNodes], INavigationModel):
         return VAEStraightLinePlanner(nodes)
 
 
+class VAEStraightLinePlanner(TFGraphClass[PathPlanningNodes], INavigationModel):
+    # TODO: Make this work... It's broken now because of the replicate subgraph thing.
 
+    def plan_route_and_get_zs(self, start_img, dest_img, slice_video=None):
+        xs = (start_img.astype(np.float32))[None]/255.999
+        xd = (start_img.astype(np.float32))[None]/255.999
+        video, zp = self.sess.run([self.nodes.x_path, self.nodes.z_path], feed_dict={self.nodes.xs: xs, self.nodes.xd: xd, self.nodes.batch_size: len(start_img)})
+        return video, zp
+
+    @staticmethod
+    def from_vae(vae: TFGraphClass[VAEGraph], step_spacing = 0.05):
+
+        nodes = vae.nodes  # type: VAEGraph
+
+        # batch_size = tf.placeholder(tf.int32, [], name='the_batch_size')
+        (xs, batch_size), zs = replicate_subgraph(inputs=[nodes.x_sample, nodes.batch_size], outputs=nodes.z_mu, new_inputs={nodes.batch_size: None})
+        (xd, batch_size), zd = replicate_subgraph(inputs=[nodes.x_sample, nodes.batch_size], outputs=nodes.z_mu, new_inputs={nodes.batch_size: None})
+        n_waypoints = tf.maximum(2, tf.to_int32(tf.ceil(tf.reduce_sum(tf.sqrt(((zs-zd)**2)) / step_spacing))))
+        frac = tf.linspace(0., 1., n_waypoints)[:, None]
+        zp = zs*(1-frac) + zd*frac
+
+        _, video = replicate_subgraph(inputs=[nodes.z_sample, nodes.batch_size], new_inputs=[zp, batch_size], outputs=vae.nodes.x_mu)
+
+        nodes = PathPlanningNodes(xs=xs, xd=xd, z_path=zp, x_path=video, batch_size=batch_size)
+        return VAEStraightLinePlanner(nodes)
 
 
 def demo_show_navigation_video(
@@ -226,10 +250,9 @@ if __name__ == "__main__":
 
         @staticmethod
         def vae_planner():
-            # vae = TFGraphClass.load(get_artemis_data_path('tests/models/M0B6AQVS4DF91940/model'))
-            # demo_use_system_controller(model = VAEStraightLineNavModel(vae))
             vae = TFGraphClass.load(get_artemis_data_path('tests/models/M0B6AQVS4DF91940/model'))
+            demo_use_system_controller(model = VAEStraightLineNavModel(vae))
+            # vae = TFGraphClass.load(get_artemis_data_path('tests/models/M0B6AQVS4DF91940/model'))
+            # demo_use_system_controller(model = VAEStraightLinePlanner.from_vae(vae))
 
-            demo_use_system_controller(model = VAEStraightLinePlanner.from_vae(vae))
-
-    ImageNavigationDemos.vae_planner()
+    ImageNavigationDemos.pretrained_vid()

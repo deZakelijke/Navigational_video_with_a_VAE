@@ -9,13 +9,15 @@ from torch.nn import functional as F
 
 class VAE(nn.Module):
 
-    def __init__(self, latent_dims=2, image_size=(30, 30)):
+    def __init__(self, latent_dims=2, image_size=(30, 30), supervision=1.0, desired_dims=2):
         super().__init__()
 
         self.latent_dims = latent_dims
         self.image_size = image_size
         self.intermediate_dims = 160
         self.flat_dims = 30 * 30
+        self.supervision = supervision
+        self.desired_dims = desired_dims
 
         self.enc1    = nn.Linear(self.flat_dims, self.intermediate_dims)
         self.enc2    = nn.Linear(self.intermediate_dims, self.intermediate_dims)
@@ -64,9 +66,24 @@ class VAE(nn.Module):
     def loss_function(self, recon_x, x, mu, logvar):
         BCE = F.binary_cross_entropy(recon_x, x, reduction='sum')
         KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-        # DL  = F.binary_cross_entropy(recon_x_disc, labels)
         return BCE + KLD
-           
+
+    def loss_function_with_SSV(self, recon_x, x, mu, logvar, position):
+        """ Calculates three loss values and returns their sum
+            
+        Calculates the Binary Cross entropy between the ground truth and 
+        the generated samples. 
+        Calulates the KL-divergence of the latent
+        representation. 
+        Ca
+        """
+        BCE = F.binary_cross_entropy(recon_x, x, reduction='sum')
+        KLD = (1 - self.supervision) * -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+        PDL = self.supervision * (F.mse_loss(mu[:, :self.desired_dims], position, reduction="sum")
+            -0.5 * torch.sum(1 + logvar[:, self.desired_dims:] - mu[:, self.desired_dims:].pow(2) 
+            - logvar[:, self.desired_dims:].exp()))
+        return BCE + KLD + PDL
+          
 
 if __name__ == "__main__":
     pass

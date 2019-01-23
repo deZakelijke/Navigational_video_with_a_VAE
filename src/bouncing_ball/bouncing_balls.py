@@ -45,6 +45,8 @@ def generate_bouncing_ball_positions(
 
     radii = np.array([radii]*n_balls) if np.isscalar(radii) else np.array(radii)
     masses = np.array([masses]*n_balls) if np.isscalar(masses) else np.array(masses)
+    assert len(radii)==n_balls
+    assert len(masses)==n_balls
 
     single_sample = n_samples is None
     if single_sample:
@@ -80,8 +82,8 @@ def generate_bouncing_ball_positions(
             v[:] = np.where(positions - radii[:, None] < 0, -v, v)
             v[:] = np.where(positions + radii[:, None] > SIZE, -v, v)
 
-            random_pertubation = np.random.normal(0, 0.05, v.shape)
-            v += random_pertubation
+            # random_pertubation = np.random.normal(0, 0.05, v.shape)
+            # v += random_pertubation
             for i in range(n_balls):  # For each ball
                 for j in range(i):  # For all balls before ball i
                     separations = positions[..., i, :] - positions[..., j, :]
@@ -119,7 +121,8 @@ def load_bouncing_ball_data(resolution, n_steps, n_samples, save_positions=False
     positions = np.empty((n_steps, n_samples, N_BALLS, 2))
     for t, imgs in enumerate(generate_bouncing_ball_data(resolution=resolution, n_steps=n_steps, n_samples=n_samples, save_positions=save_positions, **kwargs)):
         data[t] = imgs[0]
-        positions[t] = imgs[1]
+        if save_positions:
+            positions[t] = imgs[1]
     if save_positions:
         return data, positions
     else:
@@ -160,9 +163,9 @@ def live_plot_bouncing_ball_data(resolution, n_balls, n_samples, n_steps=None, *
 if __name__ == "__main__":
 
     RESOLUTION = 30
-    N_BALLS = 1
+    N_BALLS = 3
     N_SAMPLES = 1
-    RADII = 1.2,
+    RADII = 1.2
     N_STEPS = 1600
     PLOT = True
     #RADII = 2.

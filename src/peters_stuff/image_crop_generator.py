@@ -35,9 +35,9 @@ def iter_pos_drift(n_dim, speed, cell_size=1., jitter=0.1, rng=None) -> POSITION
         v_raw = (1-jitter)*v_raw + jitter*rng.randn(2)
 
 
-def iter_pos_random(n_dim, rng) -> POSITION_GENERATOR:
+def iter_pos_random(n_dim, rng, n_iter=None) -> POSITION_GENERATOR:
     rng = get_rng(rng)
-    yield from (rng.rand(n_dim) for _ in itertools.count(0))
+    yield from (rng.rand(n_dim) for _ in (itertools.count(0) if n_iter is None else range(n_iter)))
 
 
 def iter_pos_expanding(position_generator: POSITION_GENERATOR, n_iters, center=(0.5, 0.5), start_range = (0, 0), end_range=(1, 1)) -> POSITION_GENERATOR:
@@ -97,12 +97,12 @@ def iter_bboxes_from_positions(img_size, crop_size, position_generator):
         yield generate_relative_position_crop(img_size=img_size, crop_size=crop_size, crop_position=rel_position)
 
 
-def iter_bbox_batches(image_shape, crop_size, batch_size, position_generator_constructor ='random', rng=None):
+def iter_bbox_batches(image_shape, crop_size, batch_size, position_generator_constructor ='random', n_iter=None, rng=None):
 
     rng = get_rng(rng)
     if isinstance(position_generator_constructor, str):
         if position_generator_constructor== 'random':
-            position_generator_constructor = lambda: iter_pos_random(n_dim=2, rng=rng)
+            position_generator_constructor = lambda: iter_pos_random(n_dim=2, n_iter=n_iter, rng=rng)
         else:
             raise NotImplementedError(position_generator_constructor)
     else:

@@ -17,8 +17,9 @@ from artemis.general.duck import Duck
 from artemis.general.image_ops import resize_image
 from artemis.ml.tools.iteration import batchify_generator
 from artemis.plotting.db_plotting import dbplot, hold_dbplots
-from src.peters_stuff.crop_predictors import ICropPredictor, GQNCropPredictor, GQNCropPredictor2, DeconvCropPredictor, \
-    GQNCropPredictor3
+from src.peters_stuff.crop_predictors import ICropPredictor
+from src.peters_stuff.crop_predictors_torch import DeconvCropPredictor
+from src.peters_stuff.crop_predictors_tf import GQNCropPredictor, GQNCropPredictor2, GQNCropPredictor3
 from src.peters_stuff.image_crop_generator import iter_bboxes_from_positions, iter_pos_random, batch_crop, \
     iter_bbox_batches
 from src.peters_stuff.position_predictors import bbox_to_position
@@ -59,7 +60,8 @@ def demo_train_just_vae_on_images_gqn(
 
         duck[next, :] = dict(iter=i, pixel_error=pixel_error, elapsed=time.time()-t_start, training_loss=training_loss)
 
-        if do_every('30s'):
+        # if do_every('30s'):
+        if do_every(100):
             report = f'Iter: {i}, Pixel Error: {pixel_error:3g}, Mean Rate: {i/(time.time()-t_start):.3g}iter/s'
             print(report)
             with hold_dbplots():
@@ -104,7 +106,10 @@ if __name__ == '__main__':
     # X64.run()
     # X128.run()
     # demo_train_just_vae_on_images_gqn()
-    demo_train_just_vae_on_images_gqn.browse(raise_display_errors=True)
+    # demo_train_just_vae_on_images_gqn.browse(raise_display_errors=True)
+
+    # Xgqn3.get_variant('params').run()
+    Xgqn3.get_variant('params').call()
 
     # demo_train_just_vae_on_images_gqn.get_variant('deconv1').run()
     # demo_train_just_vae_on_images_gqn.get_variant('gqn1').call()

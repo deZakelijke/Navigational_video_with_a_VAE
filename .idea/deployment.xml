@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="PublishConfigData" serverName="petered@146.50.28.7:22">
+    <serverData>
+      <paths name="petered@146.50.28.7:22">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/petered/remote/Navigational_video_with_a_VAE" local="$PROJECT_DIR$" />
+            <mapping deploy="/home/petered/remote/vae-celebA" local="$PROJECT_DIR$/../vae-celebA" />
+            <mapping deploy="/home/petered/remote/Navigational_video_with_a_VAE/src/src/artemis/" local="$PROJECT_DIR$/../petes_nn_factory/venv3/src/artemis" />
+            <mapping deploy="" local="" />
+          </mappings>
+        </serverdata>
+      </paths>
+    </serverData>
+  </component>
+</project>
