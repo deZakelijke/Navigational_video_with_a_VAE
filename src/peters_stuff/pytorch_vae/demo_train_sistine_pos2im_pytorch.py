@@ -52,7 +52,10 @@ def demo_train_convlstm_pos2im(
 
         predicted_dist = model(positions)
 
-        loss = ((predicted_dist.mean - normed_image_crops)**2).flatten(1).mean()
+        # loss = ((predicted_dist.mean - normed_image_crops)**2).flatten(1).mean()
+
+        loss = -predicted_dist.log_prob(normed_image_crops).flatten(1).sum(dim=1).mean()
+
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
@@ -80,7 +83,7 @@ def demo_train_convlstm_pos2im(
 
 Xgqn3=demo_train_convlstm_pos2im.add_root_variant(save_models=True).add_config_variant('gqn3',
    model = lambda n_hidden_channels=128, n_canvas_channels=64:
-    ConvLSTMPositiontoImageDecoder(input_shape=(3, 64, 64), n_hidden_channels=n_hidden_channels, n_canvas_channels=n_canvas_channels))
+    ConvLSTMPositiontoImageDecoder(input_shape=(3, 64, 64), n_hidden_channels=n_hidden_channels, n_canvas_channels=n_canvas_channels, output_type='normal_unitvar'))
 # Xgqn3.add_variant('params', n_maps=128, canvas_channels=64)
 
 if __name__ == '__main__':

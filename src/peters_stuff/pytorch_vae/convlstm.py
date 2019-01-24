@@ -54,7 +54,7 @@ class ConvLSTMCell(nn.Module):
 
 class ConvLSTMPositiontoImageDecoder(nn.Module, IPositionToImageDecoder):
 
-    def __init__(self, input_shape, n_hidden_channels, n_canvas_channels, n_pose_channels=2, kernel_size=5, forget_bias=1.0, canvas_scale=4, n_steps = 12, output_kernel_size=5, output_type ='normal'):
+    def __init__(self, input_shape, n_hidden_channels, n_canvas_channels, n_pose_channels=2, kernel_size=5, forget_bias=1.0, canvas_scale=4, n_steps = 12, output_kernel_size=5, output_type =DistributionLayer.Types.NORMAL_UNITVAR):
         super(ConvLSTMPositiontoImageDecoder, self).__init__()
         n_image_channels, self.n_y_canvas, self.n_x_canvas = input_shape
         self.canvas_scale = canvas_scale
