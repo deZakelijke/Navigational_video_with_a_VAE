@@ -147,6 +147,8 @@ X_vae_supervised_separate_zeroed = X_vae_supervised_separate.add_variant(zero_in
 # and X_vae_supervised_separate_zeroed basically fail, regardless of the zero_init_irrelevant_latents setting.
 
 X_vae_supervised_target = X_vae.add_variant('vae_supervised_target', z_sample_schedule = 'target', supervision_schedule = 1., zero_init_irrelevant_latents = True)
+X_vae_supervised_target_init = X_vae.add_variant('vae_supervised_target_init', z_sample_schedule = {0: 'target', 5000: 'natural'}, supervision_schedule = {0: 1., 5000: 0.}, zero_init_irrelevant_latents = True)
+
 
 # X_vae_initially_supervised = X_vae.add_variant(supervision_schedule = {0: 1, 10000: 0}, z_sample_schedule={0: 'target', 10000: None})
 
