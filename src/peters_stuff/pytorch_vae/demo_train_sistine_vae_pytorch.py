@@ -40,16 +40,17 @@ def demo_train_sistine_vae_pytorch(
         optimizer = ('adam', {}),
         supervision_schedule = 0,
         z_sample_schedule = 'natural',
-        zero_init_irrelevant_latents = False,
+        zero_irrelevant_latents_schedule = False,
         ):
 
     img = SampleImages.sistine_512()
 
     cuda = setup_cuda_if_available(model)
 
-    if zero_init_irrelevant_latents:
-        first_decoder_kernel = next(model.decoder.parameters())
-        first_decoder_kernel.data[:, 2:, :, :] = 0
+    # assert zero_init_irrelevant_latents in (True, False, 'always')
+    # if zero_init_irrelevant_latents in (True, 'always'):
+    #     next(model.decoder.parameters()).data[:, 2:, :, :] = 0
+
 
     optimizer = get_named_optimizer(name = optimizer[0], params=model.parameters(), args=optimizer[1])
 
@@ -66,6 +67,7 @@ def demo_train_sistine_vae_pytorch(
         supervision_schedule = ParameterSchedule(supervision_schedule)
 
     z_sample_schedule = ParameterSchedule(z_sample_schedule)
+    zero_irrelevant_latents_schedule = ParameterSchedule(zero_irrelevant_latents_schedule)
 
     for i, bboxes in enumerate(iter_bbox_batches(image_shape=img.shape[:2], crop_size=crop_size, batch_size=batch_size, position_generator_constructor=position_generator_constructor, n_iter=n_iter)):
 
@@ -89,6 +91,9 @@ def demo_train_sistine_vae_pytorch(
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+
+        if zero_irrelevant_latents_schedule(i):
+            next(model.decoder.parameters()).data[:, 2:, :, :] = 0
 
         pixel_error = np.abs(raw_image_crops - denormalize_image(signals.x_distribution.mean)).mean()/255.
 
@@ -141,13 +146,16 @@ X_vae_supervised = X_vae.add_variant(supervision_schedule = 1.)
 # To enforce the drop of latent dimensions, we disable reparametrization trick
 X_vae_supervised_separate = X_vae_supervised.add_variant(z_sample_schedule = 'no_reparametrization')
 
-X_vae_supervised_separate_zeroed = X_vae_supervised_separate.add_variant(zero_init_irrelevant_latents = True)
+X_vae_supervised_separate_zeroed = X_vae_supervised_separate.add_variant(zero_irrelevant_latents_schedule = True)
 
 # It seems that X_vae and X_vae_supervised and do about equally well, and that surprisingly, X_vae_supervised_separate
 # and X_vae_supervised_separate_zeroed basically fail, regardless of the zero_init_irrelevant_latents setting.
 
 X_vae_supervised_target = X_vae.add_variant('vae_supervised_target', z_sample_schedule = 'target', supervision_schedule = 1., zero_init_irrelevant_latents = True)
 X_vae_supervised_target_init = X_vae.add_variant('vae_supervised_target_init', z_sample_schedule = {0: 'target', 5000: 'natural'}, supervision_schedule = {0: 1., 5000: 0.}, zero_init_irrelevant_latents = True)
+
+
+X_vae_designed = X_vae_supervised.add_variant('designed', zero_irrelevant_latents_schedule = {0: True, 10000: False}, supervision_schedule = {0: 1, 5000: 0})
 
 
 # X_vae_initially_supervised = X_vae.add_variant(supervision_schedule = {0: 1, 10000: 0}, z_sample_schedule={0: 'target', 10000: None})
