@@ -10,6 +10,7 @@ from src.peters_stuff.image_crop_generator import batch_crop
 from src.peters_stuff.pytorch_vae.pytorch_helpers import get_default_device
 
 
+
 def chanfirst(im):
     return np.rollaxis(im, 3, 1)
 
@@ -32,10 +33,31 @@ def generate_random_model_path(code_gen_len=16, suffix='.pth'):
     return model_path
 
 
-def get_normed_crops_and_position_tensors(img, bboxes):
+def get_normed_crops_and_position_tensors(img, bboxes, scale = 1.):
     raw_image_crops = batch_crop(img=img, bboxes=bboxes)
     normed_image_crop_tensors = normalize_image(raw_image_crops).to(get_default_device()).float()
-    position_tensors = torch.from_numpy(bbox_to_position(bboxes=bboxes, image_size=img.shape[:2])).to(get_default_device()).float()
+    position_tensors = torch.from_numpy(bbox_to_position(bboxes=bboxes, scale=scale, image_size=img.shape[:2])).to(get_default_device()).float()
     return raw_image_crops, normed_image_crop_tensors, position_tensors
 
 
+if __name__ == '__main__':
+    from src.peters_stuff.sample_data import SampleImages
+    from src.peters_stuff.image_crop_generator import iter_bbox_batches
+
+    from artemis.plotting.db_plotting import dbplot, hold_dbplots, DBPlotTypes
+
+
+    img = SampleImages.sistine_512()
+    normscale = 0.25
+
+    dbplot(img, 'image')
+
+    for i, bboxes in enumerate(iter_bbox_batches(image_shape=img.shape[:2], crop_size=(64, 64), batch_size=64, position_generator_constructor='normal', n_iter=None, normscale=normscale)):
+
+        raw_image_crops, normed_image_crops, positions = get_normed_crops_and_position_tensors(img=img, bboxes=bboxes, scale=1./normscale)
+
+        with hold_dbplots():
+            dbplot(raw_image_crops, 'crops')
+            for i, bbox in enumerate(bboxes):
+                dbplot(bbox, f'bbox[{i}]', axis='image', plot_type=DBPlotTypes.BBOX_R)
+            dbplot((positions[:, 0].numpy(), positions[:, 1].numpy()), plot_type=DBPlotTypes.SCATTER)

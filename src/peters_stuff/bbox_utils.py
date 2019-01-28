@@ -264,9 +264,9 @@ def bound_bbox_delta(predicted_delta, true_delta, max_delta):
     return tuple(np.clip(p, t-m, t+m) for p, t, m in izip_equal(predicted_delta, true_delta, max_delta))
 
 
-def bbox_to_position(bboxes, image_size):
+def bbox_to_position(bboxes, image_size, scale=1.):
     bboxes = np.array(bboxes)
-    return bboxes[:, [1, 0]] / np.array((image_size[0] - (bboxes[:, 3]-bboxes[:, 1]), image_size[1] - (bboxes[:, 2]-bboxes[:, 0]))).T - 0.5
+    return scale * (bboxes[:, [1, 0]] / np.array((image_size[0] - (bboxes[:, 3]-bboxes[:, 1]), image_size[1] - (bboxes[:, 2]-bboxes[:, 0]))).T - 0.5)
 
 
 def position_to_bbox(positions, image_size, crop_size, clip=False):

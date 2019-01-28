@@ -4,7 +4,7 @@ import numpy as np
 import time
 import torch
 from torch.optim import Adam
-from typing import Callable, Tuple, Iterator
+from typing import Callable, Tuple, Iterator, Union
 
 from artemis.experiments.decorators import ExperimentFunction
 from artemis.experiments.experiment_record import save_figure_in_record
@@ -30,17 +30,18 @@ from src.peters_stuff.sweeps import generate_linear_sweeps
 @ExperimentFunction(is_root=True, compare=get_timeseries_record_comparison_function(yfield='pixel_error'), one_liner_function=get_timeseries_oneliner_function(fields = ['iter', 'pixel_error']))
 def demo_train_sistine_vae_pytorch(
         model: VAEModel,
-        position_generator_constructor: Callable[[], Iterator[Tuple[int, int]]] = 'random',
+        position_generator_constructor: Union[str, Callable[[], Iterator[Tuple[int, int]]]] = 'normal',
         batch_size=64,
         checkpoints={0:100, 1000: 1000},
         crop_size = (64, 64),
         # n_iter = None,
-        n_iter = 30000,  # Should last about 3.5h
+        n_iter = 30000,  # 10000 iterations is about an hour.
         save_models = False,
         optimizer = ('adam', {}),
         supervision_schedule = 0,
         z_sample_schedule = 'natural',
-        zero_irrelevant_latents_schedule = False,
+        zero_irrelevant_latents_schedule = False,  #
+        normscale = 0.25,  # How concentrated the samples are in the middle of the image (smaller -> more concentration)
         ):
 
     img = SampleImages.sistine_512()
@@ -69,9 +70,9 @@ def demo_train_sistine_vae_pytorch(
     z_sample_schedule = ParameterSchedule(z_sample_schedule)
     zero_irrelevant_latents_schedule = ParameterSchedule(zero_irrelevant_latents_schedule)
 
-    for i, bboxes in enumerate(iter_bbox_batches(image_shape=img.shape[:2], crop_size=crop_size, batch_size=batch_size, position_generator_constructor=position_generator_constructor, n_iter=n_iter)):
+    for i, bboxes in enumerate(iter_bbox_batches(image_shape=img.shape[:2], crop_size=crop_size, batch_size=batch_size, position_generator_constructor=position_generator_constructor, n_iter=n_iter, normscale=normscale)):
 
-        raw_image_crops, normed_image_crops, positions = get_normed_crops_and_position_tensors(img=img, bboxes=bboxes)
+        raw_image_crops, normed_image_crops, positions = get_normed_crops_and_position_tensors(img=img, bboxes=bboxes, scale=1./normscale)
 
         with switch(z_sample_schedule(i)) as case:
             z_samples = \
@@ -95,15 +96,23 @@ def demo_train_sistine_vae_pytorch(
         if zero_irrelevant_latents_schedule(i):
             next(model.decoder.parameters()).data[:, 2:, :, :] = 0
 
-        pixel_error = np.abs(raw_image_crops - denormalize_image(signals.x_distribution.mean)).mean()/255.
+        # pixel_error = np.abs(raw_image_crops - denormalize_image(signals.x_distribution.mean)).mean()/255.
 
-        duck[next, :] = dict(iter=i, pixel_error=pixel_error, elapsed=time.time()-t_start, training_loss=loss.item(), supervision_factor=supervision_factor)
+        duck[next, :] = dict(
+            iter=i,
+            pixel_error=np.abs(raw_image_crops - denormalize_image(signals.x_distribution.mean)).mean()/255.,
+            elapsed=time.time()-t_start,
+            training_loss=loss.item(),
+            elbo=signals.elbo.mean().item(),
+            supervision_factor=supervision_factor
+            )
 
         if is_checkpoint():
 
             N_DISPLAY_IMAGES = 16
 
-            report = f'Iter: {i}, Pixel Error: {pixel_error:3g}, ELBO: {-loss.item():.3g}, Mean Rate: {i/(time.time()-t_start):.3g}iter/s, Supervision Factor: {supervision_factor:.3g}'
+            lastduck = duck[-1]
+            report = f"Iter: {i}, Pixel Error: {lastduck['pixel_error']:3g}, ELBO: {lastduck['elbo']:.3g}, Loss: {lastduck['training_loss']:.3g}, Mean Rate: {i/lastduck['elapsed']:.3g}iter/s, Supervision Factor: {supervision_factor:.3g}"
             print(report)
 
             z_points = torch.randn(N_DISPLAY_IMAGES, model.latent_dim)
@@ -155,13 +164,13 @@ X_vae_supervised_separate_zeroed = X_vae_supervised_separate.add_variant(zero_ir
 # X_vae_supervised_target_init = X_vae.add_variant('vae_supervised_target_init', z_sample_schedule = {0: 'target', 5000: 'natural'}, supervision_schedule = {0: 1., 5000: 0.}, zero_init_irrelevant_latents = True)
 
 
-X_vae_designed = X_vae_supervised.add_variant('designed', zero_irrelevant_latents_schedule = {0: True, 10000: False}, supervision_schedule = {0: 1, 5000: 0})
+X_vae_designed = X_vae_supervised.add_variant('designed', zero_irrelevant_latents_schedule = {0: True, 10000: False}, supervision_schedule = {0: 1, 10000: 0}, z_sample_schedule={0: 'target', 10000: 'natural'})
 
 
 # X_vae_initially_supervised = X_vae.add_variant(supervision_schedule = {0: 1, 10000: 0}, z_sample_schedule={0: 'target', 10000: None})
 
 if __name__ == '__main__':
-
+    print('woo')
     X_vae.browse()
     # X_vae_supervised.call()
     # X_vae_supervised_separate.call()R

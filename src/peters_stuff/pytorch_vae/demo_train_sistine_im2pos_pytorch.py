@@ -6,6 +6,7 @@ import string
 import numpy as np
 import time
 import torch
+from torch.distributions import Normal, kl_divergence
 from torch.optim import Adam
 from typing import Callable, Tuple, Iterator
 
@@ -84,6 +85,10 @@ def demo_train_convlstm_pos2im(
         predicted_position_dist = model(normed_image_crops)
 
         loss = ((predicted_position_dist.mean - positions)**2).flatten(1).mean()
+
+        # loss = - Normal(loc = predicted_position_dist.mean[:, :2], scale=predicted_position_dist.scale[:, :2]).log_prob(positions).sum(dim=1).mean()
+            # + kl_divergence(Normal(loc = predicted_position_dist.mean[:, 2:], scale=predicted_position_dist.scale[:, 2:]), prior_on_remaining_dims).sum(dim=1)
+
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
