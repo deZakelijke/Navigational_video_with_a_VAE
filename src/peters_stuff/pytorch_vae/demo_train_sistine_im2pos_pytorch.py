@@ -165,8 +165,8 @@ if __name__ == '__main__':
 
     # Xgqn3.run()
 
-    # Xgqn3.browse()
-    Xgqn3.call()
+    Xgqn3.browse()
+    # Xgqn3.call()
 
     # Xgqn.call()
     # Xgqn2.run()

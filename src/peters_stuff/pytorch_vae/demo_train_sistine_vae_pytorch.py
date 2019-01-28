@@ -151,8 +151,8 @@ X_vae_supervised_separate_zeroed = X_vae_supervised_separate.add_variant(zero_ir
 # It seems that X_vae and X_vae_supervised and do about equally well, and that surprisingly, X_vae_supervised_separate
 # and X_vae_supervised_separate_zeroed basically fail, regardless of the zero_init_irrelevant_latents setting.
 
-X_vae_supervised_target = X_vae.add_variant('vae_supervised_target', z_sample_schedule = 'target', supervision_schedule = 1., zero_init_irrelevant_latents = True)
-X_vae_supervised_target_init = X_vae.add_variant('vae_supervised_target_init', z_sample_schedule = {0: 'target', 5000: 'natural'}, supervision_schedule = {0: 1., 5000: 0.}, zero_init_irrelevant_latents = True)
+# X_vae_supervised_target = X_vae.add_variant('vae_supervised_target', z_sample_schedule = 'target', supervision_schedule = 1., zero_init_irrelevant_latents = True)
+# X_vae_supervised_target_init = X_vae.add_variant('vae_supervised_target_init', z_sample_schedule = {0: 'target', 5000: 'natural'}, supervision_schedule = {0: 1., 5000: 0.}, zero_init_irrelevant_latents = True)
 
 
 X_vae_designed = X_vae_supervised.add_variant('designed', zero_irrelevant_latents_schedule = {0: True, 10000: False}, supervision_schedule = {0: 1, 5000: 0})
@@ -164,6 +164,6 @@ if __name__ == '__main__':
 
     X_vae.browse()
     # X_vae_supervised.call()
-    # X_vae_supervised_separate.call()
+    # X_vae_supervised_separate.call()R
     # X_vae_initially_supervised.call()
     # X_vae_supervised_separate_zeroed.call()
