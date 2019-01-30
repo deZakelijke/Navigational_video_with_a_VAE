@@ -64,7 +64,7 @@ class VAEModel(nn.Module):
         return x_dist.sample()
 
 
-def get_supervised_vae_loss(signals: VAESignals, target: torch.Tensor, supervision_factor: float) -> torch.Tensor:
+def get_supervised_vae_loss(signals: VAESignals, target: torch.Tensor, supervision_factor: float, kl_on_targets = False) -> torch.Tensor:
     """
     Suppose we have an idea of the desired latent representation of a VAE.  We can smoothely interpolate between the
     regular VAE loss, and a supervised loss where we explicitely train the latent representation.
@@ -77,11 +77,14 @@ def get_supervised_vae_loss(signals: VAESignals, target: torch.Tensor, supervisi
     target_dim = target.size()[1]
     latent_dim = signals.z_samples.size()[1]
     assert target_dim<=latent_dim, "Target dim must be <= latent dim."
-    prior_on_remaining_dims = Normal(loc=torch.zeros(latent_dim-target_dim), scale=1)
+    prior_on_remaining_dims = Normal(loc=torch.zeros(latent_dim if kl_on_targets else latent_dim-target_dim), scale=1)
     # Push the latent dims to match the corresponding target dims.  Latent dims without target dims will be encouraged to approach the prior.
+
+    starting_kl_index = 0 if kl_on_targets else 2
+
     supervised_loss = \
         - Normal(loc = signals.z_distribution.mean[:, :2], scale=signals.z_distribution.scale[:, :2]).log_prob(target).sum(dim=1) \
-        + kl_divergence(Normal(loc = signals.z_distribution.mean[:, 2:], scale=signals.z_distribution.scale[:, 2:]), prior_on_remaining_dims).sum(dim=1)
+        + kl_divergence(Normal(loc = signals.z_distribution.mean[:, starting_kl_index:], scale=signals.z_distribution.scale[:, starting_kl_index:]), prior_on_remaining_dims).sum(dim=1)
     latent_loss = (1-supervision_factor)*signals.kl_div + supervision_factor*supervised_loss
     return -signals.data_log_likelihood + latent_loss
 

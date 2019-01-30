@@ -27,7 +27,7 @@ from src.peters_stuff.sample_data import SampleImages
 from src.peters_stuff.sweeps import generate_linear_sweeps
 
 
-@ExperimentFunction(is_root=True, compare=get_timeseries_record_comparison_function(yfield='pixel_error'), one_liner_function=get_timeseries_oneliner_function(fields = ['iter', 'pixel_error']))
+@ExperimentFunction(is_root=True, compare=get_timeseries_record_comparison_function(yfield=['pixel_error', 'elbo', 'kl']), one_liner_function=get_timeseries_oneliner_function(fields = ['iter', 'pixel_error']))
 def demo_train_sistine_vae_pytorch(
         model: VAEModel,
         position_generator_constructor: Union[str, Callable[[], Iterator[Tuple[int, int]]]] = 'normal',
@@ -78,16 +78,16 @@ def demo_train_sistine_vae_pytorch(
             z_samples = \
                 None if case('natural') else \
                 'no_reparametrization' if case('no_reparametrization') else \
-                torch.cat([positions, torch.zeros((batch_size, model.latent_dim-2))], dim=1) if case('target') else \
+                torch.cat([positions, torch.zeros((batch_size, model.latent_dim-2))], dim=1) if case('target', 'target_kl') else \
                 bad_value(case.value)
 
-        signals = model.compute_all_signals(normed_image_crops, z_samples = z_samples)
+            signals = model.compute_all_signals(normed_image_crops, z_samples = z_samples)
 
-        supervision_factor = supervision_schedule(i) if supervision_schedule is not None else None
-        if supervision_factor:
-            loss = get_supervised_vae_loss(signals=signals, target=positions, supervision_factor=supervision_factor).mean()
-        else:
-            loss = -signals.elbo.mean()
+            supervision_factor = supervision_schedule(i) if supervision_schedule is not None else None
+            if supervision_factor:
+                loss = get_supervised_vae_loss(signals=signals, target=positions, supervision_factor=supervision_factor, kl_on_targets=case('target_kl')).mean()
+            else:
+                loss = -signals.elbo.mean()
 
         optimizer.zero_grad()
         loss.backward()
@@ -101,6 +101,8 @@ def demo_train_sistine_vae_pytorch(
         duck[next, :] = dict(
             iter=i,
             pixel_error=np.abs(raw_image_crops - denormalize_image(signals.x_distribution.mean)).mean()/255.,
+            kl = signals.kl_div.mean(),
+            data_logp = signals.data_log_likelihood.mean(),
             elapsed=time.time()-t_start,
             training_loss=loss.item(),
             elbo=signals.elbo.mean().item(),
@@ -112,7 +114,7 @@ def demo_train_sistine_vae_pytorch(
             N_DISPLAY_IMAGES = 16
 
             lastduck = duck[-1]
-            report = f"Iter: {i}, Pixel Error: {lastduck['pixel_error']:3g}, ELBO: {lastduck['elbo']:.3g}, Loss: {lastduck['training_loss']:.3g}, Mean Rate: {i/lastduck['elapsed']:.3g}iter/s, Supervision Factor: {supervision_factor:.3g}"
+            report = f"Iter: {i}, Pixel Error: {lastduck['pixel_error']:3g}, ELBO: {lastduck['elbo']:.3g}, KL: {lastduck['kl']:.3g}, Data LogP: {lastduck['data_logp']:.3g}, Training Loss: {lastduck['training_loss']:.3g}, Mean Rate: {i/lastduck['elapsed']:.3g}iter/s, Supervision Factor: {supervision_factor:.3g}"
             print(report)
 
             z_points = torch.randn(N_DISPLAY_IMAGES, model.latent_dim)
@@ -165,12 +167,13 @@ X_vae_supervised_separate_zeroed = X_vae_supervised_separate.add_variant(zero_ir
 
 
 X_vae_designed = X_vae_supervised.add_variant('designed', zero_irrelevant_latents_schedule = {0: True, 10000: False}, supervision_schedule = {0: 1, 10000: 0}, z_sample_schedule={0: 'target', 10000: 'natural'})
+X_vae_designed_kl = X_vae_supervised.add_variant('designed_kl', zero_irrelevant_latents_schedule = {0: True, 10000: False}, supervision_schedule = {0: 1, 10000: 0}, z_sample_schedule={0: 'target_kl', 10000: 'natural'})
 
 
 # X_vae_initially_supervised = X_vae.add_variant(supervision_schedule = {0: 1, 10000: 0}, z_sample_schedule={0: 'target', 10000: None})
 
 if __name__ == '__main__':
-    print('woo')
+    print('target_kl')
     X_vae.browse()
     # X_vae_supervised.call()
     # X_vae_supervised_separate.call()R
