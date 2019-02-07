@@ -46,13 +46,18 @@ class VAE(nn.Module):
     def reparametrize(self, mu, logvar):
         if self.training:
             std = logvar.mul(0.5).exp_()
-            eps = torch.Tensor(std.data.new(std.size()).normal_())
+            if std.is_cuda:
+                eps = torch.cuda.FloatTensor(std.data.new(std.size()).normal_())
+            else:
+                eps = torch.Tensor(std.data.new(std.size()).normal_())
             return eps.mul(std).add_(mu)
         else:
             return mu
 
     def permutate(self, z):
         z_new = torch.zeros(*z.shape)
+        if z.is_cuda:
+            z_new = z_new.cuda()
         batch_size = z.shape[0]
         for i in range(z.shape[1]):
             perm = torch.randperm(batch_size)

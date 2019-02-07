@@ -116,6 +116,8 @@ if __name__ == "__main__":
     image_size = (30, 30)
     size = (1, *image_size)
     supervision = args.supervision
+
+    assert latent_dims >= desired_latent_dims
     model = VAE(latent_dims, image_size, supervision, desired_latent_dims).float()
     if args.cuda:
         model.cuda()

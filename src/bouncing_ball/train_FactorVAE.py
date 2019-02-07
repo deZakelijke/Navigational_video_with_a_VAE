@@ -54,7 +54,7 @@ def train(vae_model, disc_model, vae_optim, disc_optim, train_dataset, epoch):
         labels.data.fill_(1)
         loss = disc_model.loss(z_disc, labels)
         labels.data.fill_(0)
-        loss += disc_model.loss(z_disc_perm, labels)
+        loss -= disc_model.loss(z_disc_perm, labels)
         train_loss += loss
         loss.backward(retain_graph=True)
         disc_optim.step()
@@ -67,11 +67,20 @@ def train(vae_model, disc_model, vae_optim, disc_optim, train_dataset, epoch):
         vae_optim.step()
 
 
-    print(f"Training \tepoch: {epoch}, average_loss:\t{train_loss / len(train_dataset)}")
+    print(f"Training>>> epoch: {epoch}, average_loss:\t{train_loss / len(train_dataset)}")
 
-def test(vae_model, disc_model):
+def test(vae_model, disc_model, test_dataset, epoch):
     vae_model.eval()
     disc_model.eval()
+    if epoch % 10:
+        return
+
+    for idx, minibatch in enumerate(test_dataset):
+        labels = torch.FloatTensor(minibatch.shape[0], 1)
+        if args.cuda:
+            minibatch = minibatch.cuda()
+            labels = labels.cuda()
+        minibatch = minibatch.float()
 
 
 if __name__ == "__main__":
@@ -96,8 +105,8 @@ if __name__ == "__main__":
     vae_model = VAE(latent_dims=latent_dims, image_size=image_size, gamma=gamma).float()
     disc_model = Discriminator(latent_dims=latent_dims, image_size=image_size).float()
     if args.cuda:
-        vae_model.cuda()
-        disc_model.cuda()
+        vae_model = vae_model.cuda()
+        disc_model = disc_model.cuda()
 
     vae_optim = optim.Adam(vae_model.parameters(), lr=args.learning_rate)
     disc_optim = optim.Adam(disc_model.parameters(), lr=args.learning_rate)
@@ -105,7 +114,7 @@ if __name__ == "__main__":
     try:
         for epoch in range(args.epochs):
             train(vae_model, disc_model, vae_optim, disc_optim, train_dataset, epoch)
-            test(vae_model, disc_model)
+            test(vae_model, disc_model, test_dataset, epoch)
     except KeyboardInterrupt:
         print("Manual interruption of training")
         sys.exit(0)
