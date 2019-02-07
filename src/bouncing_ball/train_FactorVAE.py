@@ -24,6 +24,8 @@ def get_argparser():
                                 help='The learning rate of the model')
     parser.add_argument('--batch-size', type=int, default=32, metavar='N',
                                 help='input batch size for training (default: 32)')
+    parser.add_argument('--debug', action='store_true', default=False,
+                                help='enable debug mode, saves no models')
 
     args = parser.parse_args()
     args.cuda = args.cuda and torch.cuda.is_available()
@@ -54,7 +56,7 @@ def train(vae_model, disc_model, vae_optim, disc_optim, train_dataset, epoch):
         labels.data.fill_(1)
         loss = disc_model.loss(z_disc, labels)
         labels.data.fill_(0)
-        loss -= disc_model.loss(z_disc_perm, labels)
+        loss += disc_model.loss(z_disc_perm, labels)
         train_loss += loss
         loss.backward(retain_graph=True)
         disc_optim.step()
@@ -67,7 +69,7 @@ def train(vae_model, disc_model, vae_optim, disc_optim, train_dataset, epoch):
         vae_optim.step()
 
 
-    print(f"Training>>> epoch: {epoch}, average_loss:\t{train_loss / len(train_dataset)}")
+    print(f"Training>>> epoch: {epoch}, average loss:\t{train_loss / len(train_dataset)}")
 
 def test(vae_model, disc_model, test_dataset, epoch):
     vae_model.eval()
@@ -75,19 +77,38 @@ def test(vae_model, disc_model, test_dataset, epoch):
     if epoch % 10:
         return
 
+    test_loss = 0
     for idx, minibatch in enumerate(test_dataset):
         labels = torch.FloatTensor(minibatch.shape[0], 1)
         if args.cuda:
             minibatch = minibatch.cuda()
             labels = labels.cuda()
         minibatch = minibatch.float()
+        recon, mu, logvar, z, z_perm = vae_model(minibatch)
+        z_disc = disc_model(z)
+        z_disc_perm = disc_model(z_perm)
 
+        labels.data.fill_(1)
+        loss = disc_model.loss(z_disc, labels)
+        labels.data.fill_(0)
+        loss += disc_model.loss(z_disc_perm, labels)
+        loss += vae_model.loss(minibatch, recon, mu, logvar, z_disc)
+        test_loss += loss
+
+        if idx == 0 and epoch % 20 == 0:
+            n = min(minibatch.shape[0], 8)
+            comparison = torch.cat([minibatch[:n], recon.view(args.batch_size, *size)[:n]])
+            save_image(comparison.data.cpu(),
+                f"results/reconstruction_FactorVAE_{epoch}.png", nrow=n)
+
+    print(f"Testing>>>> epoch: {epoch}, average loss:\t{test_loss / len(test_dataset)}\n")
 
 if __name__ == "__main__":
     args = get_argparser()
 
     latent_dims = 20
     image_size = (30, 30)
+    size = (1, *image_size)
     gamma = 40
     use_positions = False
     normalize = True
@@ -112,12 +133,13 @@ if __name__ == "__main__":
     disc_optim = optim.Adam(disc_model.parameters(), lr=args.learning_rate)
 
     try:
-        for epoch in range(args.epochs):
+        for epoch in range(1, args.epochs + 1):
             train(vae_model, disc_model, vae_optim, disc_optim, train_dataset, epoch)
             test(vae_model, disc_model, test_dataset, epoch)
     except KeyboardInterrupt:
         print("Manual interruption of training")
         sys.exit(0)
     finally:
-        print("Saving model")
-        print("Saving not implemented")
+        if not args.debug:
+            print("Saving model")
+            print("Saving not implemented")
