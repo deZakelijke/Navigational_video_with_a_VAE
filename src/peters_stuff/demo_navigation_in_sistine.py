@@ -73,6 +73,32 @@ class VAEStraightLineNavModel(INavigationModel):
 
 PathPlanningNodes = namedtuple('PathPlanningNodes', ['xs', 'xd', 'z_path', 'x_path', 'batch_size'])
 
+class VAEStraightLinePlanner(TFGraphClass[PathPlanningNodes], INavigationModel):
+    # TODO: Make this work... It's broken now because of the replicate subgraph thing.
+
+    def plan_route_and_get_zs(self, start_img, dest_img, slice_video=None):
+        xs = (start_img.astype(np.float32))[None]/255.999
+        xd = (start_img.astype(np.float32))[None]/255.999
+        video, zp = self.sess.run([self.nodes.x_path, self.nodes.z_path], feed_dict={self.nodes.xs: xs, self.nodes.xd: xd, self.nodes.batch_size: len(start_img)})
+        return video, zp
+
+    @staticmethod
+    def from_vae(vae: TFGraphClass[VAEGraph], step_spacing = 0.05):
+
+        nodes = vae.nodes  # type: VAEGraph
+
+        batch_size = tf.placeholder(tf.int32, [], name='the_batch_size')
+        (xs, _), zs = replicate_subgraph(inputs=[nodes.x_sample, nodes.batch_size], outputs=nodes.z_mu, new_inputs={nodes.batch_size: batch_size})
+        (xd, _), zd = replicate_subgraph(inputs=[nodes.x_sample, nodes.batch_size], outputs=nodes.z_mu, new_inputs={nodes.batch_size: batch_size})
+        n_waypoints = tf.maximum(2, tf.to_int32(tf.ceil(tf.reduce_sum(tf.sqrt(((zs-zd)**2)) / step_spacing))))
+        frac = tf.linspace(0., 1., n_waypoints)[:, None]
+        zp = zs*(1-frac) + zd*frac
+
+        _, video = replicate_subgraph(inputs=[nodes.z_sample, nodes.batch_size], new_inputs=[zp, batch_size], outputs=vae.nodes.x_mu)
+
+        nodes = PathPlanningNodes(xs=xs, xd=xd, z_path=zp, x_path=video, batch_size=batch_size)
+        return VAEStraightLinePlanner(nodes)
+
 
 class VAEStraightLinePlanner(TFGraphClass[PathPlanningNodes], INavigationModel):
     # TODO: Make this work... It's broken now because of the replicate subgraph thing.

@@ -9,7 +9,7 @@ import os
 
 from src.peters_stuff.tf_helpers import save_model_and_graph, load_model_and_graph, TFGraphClass, hold_loading_scope, \
     replicate_subgraph
-import tflearn
+
 
 def test_graph_save():
 
@@ -238,7 +238,6 @@ def test_serializable_obj():
     obj3 = TFGraphClass.load(ser_dir, scope='aaa')
     y3 = obj3(im)
     assert np.allclose(y1, y3)
-# all_ops_in_graph
 
 
 def test_duplicate_graph():
@@ -266,28 +265,11 @@ def test_duplicate_graph():
     sess.run(y1, feed_dict={x1: im})
 
 
-
-
-
-# def test_keep_it_simple():
-#     im = np.random.randn(5, 10, 10, 3)
-#
-#     x1 = tf.placeholder(shape=im.shape, dtype=tf.float32, name='x1')
-#     y1 = tf.layers.conv2d(x1, filters=4)
-#
-#
-#     x2 = tf.placeholder(shape=im.shape, dtype=tf.float32, name='x2')
-#     y2 = tf.layers.conv2d(x1, filters=4)
-
-#     y2 = tf.layers.conv2d(x1, filters=4)
-
-
-
 if __name__ == '__main__':
     # test_graph_save()
     # test_graph_save_with_namedtuple()
     # test_serializable_obj()
-    test_graph_save_and_multi_load_with_raw_tf()
+    # test_graph_save_and_multi_load_with_raw_tf()
     # test_graph_save_and_multi_load_with_tflearn()
     # test_graph_save_and_multi_load_with_keras()
-    # test_duplicate_graph()
+    test_duplicate_graph()

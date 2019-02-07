@@ -5,7 +5,7 @@ from artemis.fileman.file_getter import get_file
 from artemis.general.numpy_helpers import get_rng
 from artemis.ml.tools.iteration import batchify_generator
 from src.peters_stuff.bbox_utils import crop_img_with_bbox
-
+from src.peters_stuff.sample_data import SampleImages
 
 POSITION_GENERATOR = Iterator[Tuple[int, int]]
 
@@ -35,9 +35,14 @@ def iter_pos_drift(n_dim, speed, cell_size=1., jitter=0.1, rng=None) -> POSITION
         v_raw = (1-jitter)*v_raw + jitter*rng.randn(2)
 
 
-def iter_pos_random(n_dim, rng) -> POSITION_GENERATOR:
+def iter_pos_random(n_dim, rng, n_iter=None) -> POSITION_GENERATOR:
     rng = get_rng(rng)
-    yield from (rng.rand(n_dim) for _ in itertools.count(0))
+    yield from (rng.rand(n_dim) for _ in (itertools.count(0) if n_iter is None else range(n_iter)))
+
+
+def iter_pos_centered_normal(n_dim, rng, std=0.25, n_iter = None) -> POSITION_GENERATOR:
+    rng = get_rng(rng)
+    yield from (np.clip(rng.normal(loc=0.5, scale=std, size=n_dim), 0, 1) for _ in (itertools.count(0) if n_iter is None else range(n_iter)))
 
 
 def iter_pos_expanding(position_generator: POSITION_GENERATOR, n_iters, center=(0.5, 0.5), start_range = (0, 0), end_range=(1, 1)) -> POSITION_GENERATOR:
@@ -97,12 +102,14 @@ def iter_bboxes_from_positions(img_size, crop_size, position_generator):
         yield generate_relative_position_crop(img_size=img_size, crop_size=crop_size, crop_position=rel_position)
 
 
-def iter_bbox_batches(image_shape, crop_size, batch_size, position_generator_constructor ='random', rng=None):
+def iter_bbox_batches(image_shape, crop_size, batch_size, position_generator_constructor ='random', normscale=0.25, n_iter=None, rng=None):
 
     rng = get_rng(rng)
     if isinstance(position_generator_constructor, str):
         if position_generator_constructor== 'random':
-            position_generator_constructor = lambda: iter_pos_random(n_dim=2, rng=rng)
+            position_generator_constructor = lambda: iter_pos_random(n_dim=2, n_iter=n_iter, rng=rng)
+        elif position_generator_constructor == 'normal':
+            position_generator_constructor = lambda: iter_pos_centered_normal(n_dim=2, n_iter=n_iter, rng=rng, std=normscale)
         else:
             raise NotImplementedError(position_generator_constructor)
     else:
@@ -135,22 +142,25 @@ if __name__ == "__main__":
 
     # Here we demonstrate our data-generating process for the "crop from image" experiments, wherein we generate a bunch
     # of crops from a given image.
-    CROP_SIZE = (200, 200)
+    CROP_SIZE = (64, 64)
     BATCH_SIZE = 16
-    IMG = resize_image(smart_load_image(get_file('data/images/sistine_chapel.jpg', url='https://drive.google.com/uc?export=download&id=1g4HOxo2doBL6aPgYFoiqgLC8Mkinqao6')), width=2000, mode='preserve_aspect')
+    # IMG = resize_image(smart_load_image(get_file('data/images/sistine_chapel.jpg', url='https://drive.google.com/uc?export=download&id=1g4HOxo2doBL6aPgYFoiqgLC8Mkinqao6')), width=2000, mode='preserve_aspect')
+
+    IMG = SampleImages.sistine_512()
 
     # crop_gen_func = lambda: generate_random_bboxes(img_size=img.shape[:2], crop_size=crop_size)
     # crop_gen_func = lambda: generate_expanding_random_bbox_range(img_size=img.shape[:2], crop_size=crop_size, rel_position_generator = (np.random.rand(2) for _ in itertools.count(0)), n_iters=100, start_range=(0.1, 0.1))
-    crop_gen_func = lambda: iter_bboxes_from_positions(
-        img_size=IMG.shape[:2],
-        crop_size=CROP_SIZE,
-        position_generator= iter_pos_expanding(
-            position_generator=iter_pos_drift(n_dim=2, speed=0.02, cell_size=1., jitter=0.1, rng=None), n_iters=100, start_range=(0.1, 0.1),
-        ),
-    )
+    # crop_gen_func = lambda: iter_bboxes_from_positions(
+    #     img_size=IMG.shape[:2],
+    #     crop_size=CROP_SIZE,
+    #     position_generator= iter_pos_centered_normal(n_dim=2, rng=None)
+    # )
 
     dbplot(IMG, 'image')
-    for bboxes in batchify_generator((crop_gen_func() for _ in range(BATCH_SIZE)), batch_size=BATCH_SIZE):
+    # for bboxes in batchify_generator((crop_gen_func() for _ in range(BATCH_SIZE)), batch_size=BATCH_SIZE):
+
+    for bboxes in iter_bbox_batches(image_shape=IMG.shape[:2], crop_size=CROP_SIZE, batch_size=BATCH_SIZE, position_generator_constructor='normal', n_iter=None):
+
         image_crops = batch_crop(img=IMG, bboxes=bboxes)
         with hold_dbplots():
             dbplot(image_crops, 'crops')
