@@ -27,7 +27,7 @@ class VAE(nn.Module):
         self.dec_3  = nn.Linear(self.flat_dims, self.flat_dims)
 
         self.tanh = nn.Tanh()
-        self.sigm = nn.sigmoid()
+        self.sigm = nn.Sigmoid()
 
     def encode(self, x):
         h1 = x.view(-1, self.flat_dims)
@@ -41,7 +41,7 @@ class VAE(nn.Module):
         h1 = self.tanh(self.dec_1(z))
         h2 = self.tanh(self.dec_2(h1))
         h3 = self.sigm(self.dec_3(h2))
-        return h3.view(-1, *self.image_size)
+        return h3.view(-1, 1, *self.image_size)
 
     def reparametrize(self, mu, logvar):
         if self.training:
@@ -51,9 +51,13 @@ class VAE(nn.Module):
         else:
             return mu
 
-    def permuate(self, z):
-#TODO implement permutation
-        return torch.Tensor(z)
+    def permutate(self, z):
+        z_new = torch.zeros(*z.shape)
+        batch_size = z.shape[0]
+        for i in range(z.shape[1]):
+            perm = torch.randperm(batch_size)
+            z_new[:, i] = z[perm, i]
+        return z_new
 
     def forward(self, x):
         mu, logvar = self.encode(x)
@@ -64,14 +68,14 @@ class VAE(nn.Module):
 
     def loss(self, x, x_recon, mu, logvar, disc):
         BCE = F.binary_cross_entropy(x_recon, x, reduction='sum')
-        KLD = 0.5 * torch.sum(1 + logar - mu.pow(2) - logvar.exp())
+        KLD = 0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
         GDL = self.gamma * torch.sum(torch.log(torch.div(disc, 1 - disc)))
         return BCE - KLD - GDL
 
 
 class Discriminator(nn.Module):
 
-    def __init__(self, latent_dims=4):
+    def __init__(self, latent_dims=4, image_size=(30, 30)):
         super().__init__()
         
         self.image_size = image_size
@@ -90,8 +94,8 @@ class Discriminator(nn.Module):
         h3 = self.tanh(self.ln_2(h2))
         return self.sigm(self.ln_3(h3))
 
-    def loss(self, disc, disc_perm):
-        loss = torch.sum(torch.log(disc) + torch.log(1 - disc_perm))
+    def loss(self, disc, labels):
+        loss = F.binary_cross_entropy(disc, labels, reduction='sum')
         return loss
         
 
