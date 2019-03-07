@@ -88,16 +88,19 @@ class Discriminator(nn.Module):
 
         self.ln_1 = nn.Linear(self.latent_dims, self.latent_dims * 4)
         self.ln_2 = nn.Linear(self.latent_dims * 4, self.latent_dims * 4)
-        self.ln_3 = nn.Linear(self.latent_dims * 4, 1)
+        self.ln_3 = nn.Linear(self.latent_dims * 4, self.latent_dims * 4)
+        self.ln_4 = nn.Linear(self.latent_dims * 4, 1)
 
         self.tanh = nn.Tanh()
         self.sigm = nn.Sigmoid()
+        self.relu = nn.ReLU()
 
     def forward(self, z):
         h1 = z.view(-1, self.latent_dims)
-        h2 = self.tanh(self.ln_1(h1))
-        h3 = self.tanh(self.ln_2(h2))
-        return self.sigm(self.ln_3(h3))
+        h2 = self.relu(self.ln_1(h1))
+        h3 = self.relu(self.ln_2(h2))
+        h4 = self.relu(self.ln_3(h3))
+        return self.sigm(self.ln_4(h4))
 
     def loss(self, disc, labels):
         loss = F.binary_cross_entropy(disc, labels, reduction='sum')
