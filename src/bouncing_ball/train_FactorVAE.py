@@ -74,6 +74,8 @@ def train(vae_model, disc_model, vae_optim, disc_optim, train_dataset, epoch):
 def test(vae_model, disc_model, test_dataset, epoch):
     vae_model.eval()
     disc_model.eval()
+    test_loss = 0
+
     if epoch % 10:
         return
 
@@ -101,7 +103,36 @@ def test(vae_model, disc_model, test_dataset, epoch):
             save_image(comparison.data.cpu(),
                 f"results/reconstruction_FactorVAE_{epoch}.png", nrow=n)
 
-    print(f"Testing>>>> epoch: {epoch}, average loss:\t{test_loss / len(test_dataset)}\n")
+# Do all forwards
+        recon, mu, logvar, z, z_perm = vae_model(minibatch)
+        z_disc = disc_model(z)
+        z_disc_perm = disc_model(z_perm)
+        #print(sum(z_disc.data), sum(z_disc_perm.data))
+
+# loss for disc
+        labels.data.fill_(1)
+        loss = disc_model.loss(z_disc, labels)
+        labels.data.fill_(0)
+        loss -= disc_model.loss(z_disc_perm, labels)
+        test_loss += loss
+
+# loss for VAE
+        loss = vae_model.loss(minibatch, recon, mu, logvar, z_disc)
+        test_loss += loss
+        
+        if not epoch % 100 and not idx:
+            n = min(minibatch.size(0), 8)
+            comparison = torch.cat([minibatch[:n],
+                recon.view(args.batch_size, *size)[:n],
+                (vae_model.decode(z_perm)).view(args.batch_size, *size)[:n]])
+            save_image(comparison.data.cpu(),
+                f"results/reconstruction_FactorVAE_{epoch}.png", nrow=n)
+
+    print(f"Testing>> epoch: {epoch}, average loss:\t{test_loss/len(test_dataset)}")
+
+# display reconstruction for both permutated and generated
+
+
 
 if __name__ == "__main__":
     args = get_argparser()
