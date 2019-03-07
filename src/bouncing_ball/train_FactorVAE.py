@@ -102,12 +102,12 @@ def test(vae_model, disc_model, test_dataset, epoch):
         test_loss += loss
         
         if not epoch % 100 and not idx:
-            n = min(x.minibatch.size(0), 8)
-            comparision = torch.cat([minibatch[:n],
+            n = min(minibatch.size(0), 8)
+            comparison = torch.cat([minibatch[:n],
                 recon.view(args.batch_size, *size)[:n],
-                (vae_model.decode(z_perm)).view(args.batch_size, *size)[:n])
+                (vae_model.decode(z_perm)).view(args.batch_size, *size)[:n]])
             save_image(comparison.data.cpu(),
-                f"results/reconstruction_FactorVAE_{epoch}.png", nrows=n)
+                f"results/reconstruction_FactorVAE_{epoch}.png", nrow=n)
 
     print(f"Testing>> epoch: {epoch}, average loss:\t{test_loss/len(test_dataset)}")
 
@@ -120,6 +120,7 @@ if __name__ == "__main__":
 
     latent_dims = 20
     image_size = (30, 30)
+    size = (1, *image_size)
     gamma = 40
     use_positions = False
     normalize = True
@@ -144,7 +145,7 @@ if __name__ == "__main__":
     disc_optim = optim.Adam(disc_model.parameters(), lr=args.learning_rate)
 
     try:
-        for epoch in range(args.epochs):
+        for epoch in range(1, args.epochs + 1):
             train(vae_model, disc_model, vae_optim, disc_optim, train_dataset, epoch)
             test(vae_model, disc_model, test_dataset, epoch)
     except KeyboardInterrupt:
