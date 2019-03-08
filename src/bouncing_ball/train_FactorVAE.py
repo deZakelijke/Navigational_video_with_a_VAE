@@ -13,21 +13,23 @@ from torchvision.utils import save_image
 def get_argparser():
     parser = argparse.ArgumentParser(description="FactorVAE trainer for bouncing ball data set")
     parser.add_argument('--epochs', type=int, default=10, metavar='N',
-                                help='number of epochs to train (default: 10)')
+                        help='number of epochs to train (default: 10)')
     parser.add_argument('--cuda', action='store_true', default=True,
-                                help='enables CUDA training')
+                        help='enables CUDA training')
     parser.add_argument('--seed', type=int, default=1, metavar='S',
-                                help='random seed (default: 1)')
+                        help='random seed (default: 1)')
     parser.add_argument('--nr-images', type=int, default=1000, metavar='N',
-                                help='Number of images from the dataset that are used (defaut: 1000)')
+                        help='Number of images from the dataset that are used (defaut: 1000)')
     parser.add_argument('--learning-rate', type=float, default=1e-3, metavar='L',
-                                help='The learning rate of the model')
+                        help='The learning rate of the model')
     parser.add_argument('--batch-size', type=int, default=32, metavar='N',
-                                help='input batch size for training (default: 32)')
+                        help='input batch size for training (default: 32)')
     parser.add_argument('--debug', action='store_true', default=False,
-                                help='enable debug mode, saves no models')
+                        help='enable debug mode, saves no models')
     parser.add_argument('--save-path', type=str, default='models/', metavar='S',
-                                help='Folder to save the trained models in (default: models/)')
+                        help='Folder to save the trained models in (default: models/)')
+    parser.add_argument('--gamma', type=int, default=40, metavar='G',
+                        help='Gamma hyperparameter to regulate training (defaukt: 40)')
 
     args = parser.parse_args()
     torch.manual_seed(args.seed)
@@ -37,14 +39,14 @@ def get_argparser():
 
     return args
 
-def train(vae_model, disc_model, vae_optim, disc_optim, train_dataset, epoch):
+def train(vae_model, disc_model, vae_optim, disc_optim, train_dataset, epoch, use_cuda):
     vae_model.train()
     disc_model.train()
     train_loss_VAE = 0
     train_loss_disc = 0
     for idx, minibatch in enumerate(train_dataset):
         labels = torch.FloatTensor(minibatch.shape[0], 1)
-        if args.cuda:
+        if use_cuda:
             minibatch = minibatch.cuda()
             labels = labels.cuda()
         minibatch = minibatch.float()
@@ -71,12 +73,12 @@ def train(vae_model, disc_model, vae_optim, disc_optim, train_dataset, epoch):
         loss.backward()
         vae_optim.step()
 
-
-    print(f"Training>>>> epoch: {epoch}, average loss VAE:\t{train_loss_VAE / len(train_dataset):0.4f}\taverage loss disc:\t{train_loss_disc / len(train_dataset):04f}")
+    if epoch % 5 == 0:
+        print(f"Training>>>> epoch: {epoch}, average loss VAE:\t{train_loss_VAE / len(train_dataset):0.4f}\taverage loss disc:\t{train_loss_disc / len(train_dataset):04f}")
     return train_loss_VAE / len(train_dataset), train_loss_disc / len(train_dataset)
 
 
-def test(vae_model, disc_model, test_dataset, epoch):
+def test(vae_model, disc_model, test_dataset, epoch, size, use_cuda):
     vae_model.eval()
     disc_model.eval()
     test_loss = 0
@@ -87,7 +89,7 @@ def test(vae_model, disc_model, test_dataset, epoch):
     test_loss = 0
     for idx, minibatch in enumerate(test_dataset):
         labels = torch.FloatTensor(minibatch.shape[0], 1)
-        if args.cuda:
+        if use_cuda:
             minibatch = minibatch.cuda()
             labels = labels.cuda()
         minibatch = minibatch.float()
@@ -102,29 +104,7 @@ def test(vae_model, disc_model, test_dataset, epoch):
         loss += vae_model.loss(minibatch, recon, mu, logvar, z_disc)
         test_loss += loss
 
-        if idx == 0 and epoch % 20 == 0:
-            n = min(minibatch.shape[0], 8)
-            comparison = torch.cat([minibatch[:n], recon.view(args.batch_size, *size)[:n]])
-            save_image(comparison.data.cpu(),
-                f"results/reconstruction_FactorVAE_{epoch}.png", nrow=n)
-
-# Do all forwards
-        recon, mu, logvar, z, z_perm = vae_model(minibatch)
-        z_disc = disc_model(z)
-        z_disc_perm = disc_model(z_perm)
-        #print(sum(z_disc.data), sum(z_disc_perm.data))
-
-# loss for disc
-        labels.data.fill_(1)
-        loss = disc_model.loss(z_disc, labels)
-        labels.data.fill_(0)
-        loss -= disc_model.loss(z_disc_perm, labels)
-        test_loss += loss
-
-# loss for VAE
-        loss = vae_model.loss(minibatch, recon, mu, logvar, z_disc)
-        test_loss += loss
-        
+       
         if not epoch % 100 and not idx:
             n = min(minibatch.size(0), 8)
             comparison = torch.cat([minibatch[:n],
@@ -137,11 +117,10 @@ def test(vae_model, disc_model, test_dataset, epoch):
     return test_loss / len(test_dataset)
 
 
-def run_training_session(use_cuda, nr_images, learning_rate, epochs, batch_size, save_path):
+def run_training_session(use_cuda, gamma, nr_images, learning_rate, epochs, batch_size, save_path, debug=False):
     latent_dims = 20
     image_size = (30, 30)
     size = (1, *image_size)
-    gamma = 40
     use_positions = False
     normalize = True
     train_dataset = DataLoader(BouncingBallLoader(n_steps=nr_images, 
@@ -157,7 +136,7 @@ def run_training_session(use_cuda, nr_images, learning_rate, epochs, batch_size,
     print("Dataset created")
     vae_model = VAE(latent_dims=latent_dims, image_size=image_size, gamma=gamma).float()
     disc_model = Discriminator(latent_dims=latent_dims, image_size=image_size).float()
-    if use_cuda and torch.cuda.is_available()
+    if use_cuda and torch.cuda.is_available():
         vae_model = vae_model.cuda()
         disc_model = disc_model.cuda()
 
@@ -166,17 +145,17 @@ def run_training_session(use_cuda, nr_images, learning_rate, epochs, batch_size,
 
     try:
         for epoch in range(1, epochs + 1):
-            train(vae_model, disc_model, vae_optim, disc_optim, train_dataset, epoch)
-            test(vae_model, disc_model, test_dataset, epoch)
+            train(vae_model, disc_model, vae_optim, disc_optim, train_dataset, epoch, use_cuda)
+            test(vae_model, disc_model, test_dataset, epoch, size, use_cuda)
     except KeyboardInterrupt:
         print("Manual interruption of training")
         sys.exit(0)
     finally:
-        if not args.debug:
+        if not debug:
             print("Saving model")
-            save_file_VAE = f"{save_path}bouncing_ball_FactorVAE_vae_epochs_{epoch}_nr_images_{args.nr_images}.pt"
+            save_file_VAE = f"{save_path}bouncing_ball_FactorVAE_vae_epochs_{epoch}_nr_images_{nr_images}_gamma_{gamma}.pt"
             torch.save(vae_model, save_file_VAE)
-            save_file_Disc = f"{save_path}bouncing_ball_FactorVAE_disc_epochs_{epoch}_nr_images_{args.nr_images}.pt"
+            save_file_Disc = f"{save_path}bouncing_ball_FactorVAE_disc_epochs_{epoch}_nr_images_{nr_images}_gamma_{gamma}.pt"
             torch.save(disc_model, save_file_Disc)
     return vae_model, disc_model
 
@@ -184,9 +163,11 @@ def run_training_session(use_cuda, nr_images, learning_rate, epochs, batch_size,
 if __name__ == "__main__":
     args = get_argparser()
     run_training_session(args.cuda, 
+                         args.gamma,
                          args.nr_images, 
                          args.learning_rate, 
                          args.epochs, 
                          args.batch_size, 
-                         args.save_path)
+                         args.save_path,
+                         debug=args.debug)
 
