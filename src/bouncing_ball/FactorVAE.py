@@ -106,6 +106,9 @@ class Discriminator(nn.Module):
         loss = F.binary_cross_entropy(disc, labels, reduction='sum')
         return loss
         
+    def set_grad(self, grad_flag):
+        for param in self.parameters():
+            param.requires_grad = grad_flag
 
 if __name__ == "__main__":
     pass

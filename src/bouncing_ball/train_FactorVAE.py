@@ -57,14 +57,15 @@ def train(vae_model, disc_model, vae_optim, disc_optim, train_dataset, epoch, us
         #print(sum(z_disc.data), sum(z_disc_perm.data))
 
 # loss for disc
+        disc_model.set_grad(True)
         disc_optim.zero_grad()
         labels.data.fill_(1)
         loss = disc_model.loss(z_disc, labels)
         labels.data.fill_(0)
         loss += disc_model.loss(z_disc_perm, labels)
         train_loss_disc += loss
-        loss.backward(retain_graph=True)
         disc_optim.step()
+        disc_model.set_grad(False)
 
 # loss for VAE
         vae_optim.zero_grad()
@@ -78,7 +79,7 @@ def train(vae_model, disc_model, vae_optim, disc_optim, train_dataset, epoch, us
     return train_loss_VAE / len(train_dataset), train_loss_disc / len(train_dataset)
 
 
-def test(vae_model, disc_model, test_dataset, epoch, size, use_cuda):
+def test(vae_model, disc_model, test_dataset, epoch, size, use_cuda, batch_size):
     vae_model.eval()
     disc_model.eval()
     test_loss = 0
@@ -108,8 +109,8 @@ def test(vae_model, disc_model, test_dataset, epoch, size, use_cuda):
         if not epoch % 100 and not idx:
             n = min(minibatch.size(0), 8)
             comparison = torch.cat([minibatch[:n],
-                recon.view(args.batch_size, *size)[:n],
-                (vae_model.decode(z_perm)).view(args.batch_size, *size)[:n]])
+                recon.view(batch_size, *size)[:n],
+                (vae_model.decode(z_perm)).view(batch_size, *size)[:n]])
             save_image(comparison.data.cpu(),
                 f"results/reconstruction_FactorVAE_{epoch}.png", nrow=n)
 
@@ -146,7 +147,7 @@ def run_training_session(use_cuda, gamma, nr_images, learning_rate, epochs, batc
     try:
         for epoch in range(1, epochs + 1):
             train(vae_model, disc_model, vae_optim, disc_optim, train_dataset, epoch, use_cuda)
-            test(vae_model, disc_model, test_dataset, epoch, size, use_cuda)
+            test(vae_model, disc_model, test_dataset, epoch, size, use_cuda, batch_size)
     except KeyboardInterrupt:
         print("Manual interruption of training")
         sys.exit(0)
